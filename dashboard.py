@@ -359,28 +359,23 @@ def decision(tech, vol, fund, plan, tm=None, sec=None):
     known = [x for x in items if x["ok"] is not None]
     passed = sum(1 for x in known if x["ok"])
     ratio = passed / len(known) if known else 0
-    trend_ok = items[0]["ok"]
-    room_bad = any(x["label"] in ("מקום עד ההתנגדות", "אין דוח בשבוע הקרוב") and x["ok"] is False for x in items)
-    if ratio >= 0.75 and trend_ok and not room_bad:
-        verdict, code = "כניסה אפשרית", "go"
-    elif ratio >= 0.5:
-        verdict, code = "להמתין", "wait"
+    rsi = tech.get("rsi")
+    if rsi is not None and rsi < MODEL["rsi_max"]:
+        verdict, code = "אות פעיל: מכירת יתר", "go"
+        action = ("RSI %.1f, מתחת ל-30. המודל קונה בפתיחה הבאה (בערך %.2f), סטופ %.2f, יעד %.2f, "
+                  "ויוצא אחרי %d ימי מסחר אם לא הגיע לאחד מהם." % (rsi, plan["entry"], plan["stop"], plan["target"], MODEL["horizon"])) if plan \
+            else "RSI %.1f, מתחת ל-30." % rsi
+    elif rsi is not None and rsi < MODEL["rsi_watch"]:
+        verdict, code = "קרוב לאות", "wait"
+        action = "RSI %.1f. האות נדלק מתחת ל-30, כלומר עוד ירידה קטנה." % rsi
     else:
-        verdict, code = "לא להיכנס", "no"
-    fails = [x["label"] for x in items if x["ok"] is False]
-    if code == "go" and plan:
-        action = "רק אם המחיר עובר את %.2f. סטופ %.2f, יעד %.2f." % (plan["trigger"], plan["stop"], plan["target"])
-    elif code == "wait":
-        WAIT = {"מגמה ראשית": "המחיר יחזור מעל ממוצע 50", "תעלת מגמה": "התעלה תתהפך לעולה או שהמחיר ירד לתחתית שלה",
-                "מומנטום (CCI + MACD)": "CCI יעלה מעל 0 ו-MACD יחצה מעל קו האות", "לא קנייה ביתר": "RSI ירד מתחת ל-70",
-                "נפח מאשר": "הנפח בימי עלייה יגבר על ימי הירידה", "מקום עד ההתנגדות": "המחיר יפרוץ את ההתנגדות הקרובה",
-                "סטטיסטיקה (Time Machine)": "הסטטיסטיקה של המניה תשתפר", "אין דיווח מהותי טרי ל-SEC": "יתבהר הדיווח החדש ל-SEC",
-                "אין דוח בשבוע הקרוב": "הדוח הכספי יעבור", "אנליסטים": "יעד האנליסטים ישתפר"}
-        action = "לחכות עד ש" + ", ".join(WAIT.get(f, f) for f in fails[:3]) + "." if fails else "לחכות לאישור נוסף."
-    else:
-        action = "רוב הכללים לא מתקיימים: " + ", ".join(fails[:4]) + "."
+        verdict, code = "אין אות", "no"
+        action = "RSI %s. המודל נכנס רק במכירת יתר (RSI מתחת ל-30)." % (("%.1f" % rsi) if rsi is not None else "-")
+    warn = [x["detail"] for x in items if x["label"] in ("אין דוח בשבוע הקרוב", "אין דיווח מהותי טרי ל-SEC") and x["ok"] is False]
+    if code == "go" and warn:
+        action += " שים לב: " + "; ".join(warn) + ". הבדיקה לאחור לא סיננה דוחות, ופער בדוח יכול לעבור את הסטופ."
     return {"verdict": verdict, "code": code, "passed": passed, "total": len(known), "score": round(ratio * 100),
-            "items": items, "action": action}
+            "items": items, "action": action, "rsi": rsi, "model": MODEL, "evidence": VALIDATED}
 
 
 # ---------------------------------------------------------------- analysis
@@ -468,30 +463,51 @@ def technicals(t, o, h, l, c, v):
     }
 
 
+# The model the backtest supports (research/REPORT2.md, run 2026-11-06 on 89 stocks, 2022-11 to 2026-11):
+# RSI(14) under 30 at the close -> buy the next open, stop 1 ATR under the entry, target 3R, exit after
+# 10 sessions. It was the only setup whose edge over buying on any day was positive in train, validation
+# and test, and in all 32 stop/target/horizon variants on the test period. Breakouts: 0 of 32.
+MODEL = {"setup": "oversold", "rsi_max": 30.0, "rsi_watch": 35.0, "stop_atr": 1.0, "target_r": 3.0, "horizon": 10}
+VALIDATED = {
+    "source": "research/REPORT2.md", "run": "2026-11-06", "stocks": 89, "period": "2022-11-08 .. 2026-11-05",
+    "test_from": "2025-04-03", "test_n": 1123, "test_win": 44.0, "test_R": 0.227, "test_R_ci": [-0.041, 0.502],
+    "test_edge": 0.146, "test_edge_ci": [-0.096, 0.388], "train_edge": 0.069, "val_edge": 0.429,
+    "variants_positive": "32/32", "breakout_variants_positive": "0/32", "pullback_variants_positive": "16/32",
+    "checklist_auc": 0.496,
+    "setups": [["פריצת השיא של אתמול (התוכנית הקודמת)", -0.010], ["פריצת שיא סגירה של 20 יום", -0.011],
+               ["חציה מעל ממוצע 20", -0.006], ["תיקון במגמה עולה", 0.019], ["מכירת יתר (RSI<30)", 0.146]],
+}
+try:
+    with open(os.path.join(HERE, "research", "strategies.json"), encoding="utf-8") as _fh:
+        _st = json.load(_fh)
+    _c = _st.get("chosen") or {}
+    if _c.get("setup") == MODEL["setup"]:
+        VALIDATED.update(test_n=_c["test_n"], test_win=_c["test_win"], test_R=_c["test_R"], test_R_ci=_c["test_R_ci"],
+                         test_edge=_c["test_edge"], test_edge_ci=_c["test_edge_ci"], run=_st.get("generated", "")[:10])
+except Exception:
+    pass
+
+
 def trade_plan(tech, cfg):
+    """The backtested plan: enter at the next open (estimated by the last price), stop 1 ATR, target 3R, 10 days."""
     price, a = tech["price"], tech["atr"]
-    if not a:
+    if not a or not price:
         return None
-    trigger = round(max(tech["prev_high"], price) + 0.01, 2)
-    breakout = tech["high20"] and tech["high20"] > price and (tech["high20"] - price) < 1.5 * a
-    if breakout:
-        trigger = round(tech["high20"] + 0.01, 2)
-    stop = math.floor((trigger - 1.0 * a) * 100) / 100
-    sup = [s["price"] for s in tech["support"] if s["price"] < trigger]
-    if sup and trigger - a * 1.6 < sup[0] < stop:
-        stop = math.floor((sup[0] - 0.05 * a) * 100) / 100  # tuck the stop under nearby support
-    risk = trigger - stop
-    target = round(trigger + cfg["target_r"] * risk, 2)
+    entry = round(price, 2)
+    stop = math.floor((entry - MODEL["stop_atr"] * a) * 100) / 100
+    risk = entry - stop
+    if risk <= 0:
+        return None
+    target = round(entry + MODEL["target_r"] * risk, 2)
     cash = cfg["budget"] * (1 - cfg["cash_buffer_pct"] / 100.0)
     cap = min(cash, cfg["budget"] * cfg["max_position_pct"] / 100.0)
-    shares = max(0, min(int(cfg["max_loss_per_trade_usd"] // risk), int(cap // trigger)))
-    res = [r["price"] for r in tech["resistance"]]
-    blocker = next((x for x in res if trigger < x < target), None)
-    return {"trigger": trigger, "stop": stop, "target": target, "risk_per_share": round(risk, 2),
-            "rr": cfg["target_r"], "shares": shares, "cost": round(shares * trigger, 2),
-            "max_loss": round(shares * risk, 2), "potential": round(shares * (target - trigger), 2),
-            "basis": "פריצה מעל שיא 20 יום" if breakout else "כניסה מעל השיא של אתמול",
-            "resistance_in_way": blocker, "budget": cfg["budget"], "max_loss_cfg": cfg["max_loss_per_trade_usd"]}
+    shares = max(0, min(int(cfg["max_loss_per_trade_usd"] // risk), int(cap // entry)))
+    rsi = tech.get("rsi")
+    return {"trigger": entry, "entry": entry, "stop": stop, "target": target, "risk_per_share": round(risk, 2),
+            "rr": MODEL["target_r"], "horizon": MODEL["horizon"], "shares": shares, "cost": round(shares * entry, 2),
+            "max_loss": round(shares * risk, 2), "potential": round(shares * (target - entry), 2),
+            "basis": "מודל מכירת יתר: כניסה בפתיחה הבאה", "active": rsi is not None and rsi < MODEL["rsi_max"],
+            "resistance_in_way": None, "budget": cfg["budget"], "max_loss_cfg": cfg["max_loss_per_trade_usd"]}
 
 
 def raw(d, k):
@@ -636,9 +652,9 @@ def ext_alerts(ext, plan):
         out.append({"level": "warn", "text": "פער %s: המחיר %s %+.1f%% מהסגירה (%.2f)." % (
             "למעלה" if ext["change"] > 0 else "למטה", word, ext["change"], ext["price"])})
     if plan:
-        if ext["price"] >= plan["trigger"]:
-            out.append({"level": "warn", "text": "המחיר %s (%.2f) כבר מעל נקודת הכניסה %.2f. כניסה בפער מגדילה את הסיכון עד הסטופ." % (
-                word, ext["price"], plan["trigger"])})
+        if plan.get("active"):
+            out.append({"level": "info", "text": "הכניסה במודל היא בפתיחה, כך שהמחיר %s (%.2f) הוא בערך מחיר הכניסה. הסטופ והיעד יחושבו מחדש מהמחיר בפתיחה." % (
+                word, ext["price"])})
         if ext["price"] <= plan["stop"]:
             out.append({"level": "bad", "text": "המחיר %s (%.2f) כבר מתחת לסטופ %.2f: התוכנית לא רלוונטית לפתיחה." % (
                 word, ext["price"], plan["stop"])})
@@ -754,7 +770,7 @@ def get_tm(sym, base, plan):
     key = (sym, plan["trigger"], plan["stop"], plan["target"], base["as_of"])
     if key not in _tm_cache:
         try:
-            _tm_cache[key] = extras.time_machine(base["candles"], plan)
+            _tm_cache[key] = extras.time_machine(base["candles"], plan, horizon=plan.get("horizon", 20))
         except Exception:
             _tm_cache[key] = None
     return _tm_cache[key]
