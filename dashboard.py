@@ -28,6 +28,11 @@ from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+try:
+    import extras  # time machine, SEC, Congress (day-trader-skill)
+except Exception:
+    extras = None
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
@@ -304,7 +309,7 @@ def volume_analysis(t, o, h, l, c, v):
             "obv_series": [[t[i], obv[i]] for i in range(max(0, n - 260), n)]}
 
 
-def decision(tech, vol, fund, plan):
+def decision(tech, vol, fund, plan, tm=None, sec=None):
     """Rule-based entry checklist. Not advice: it only says which rules pass."""
     ch = tech["channel"]
     items = []
@@ -342,6 +347,15 @@ def decision(tech, vol, fund, plan):
         if a.get("mean"):
             up = (a["mean"] / p - 1) * 100
             item("אנליסטים", up > 5 and (a.get("score") or 3) <= 2.6, "יעד ממוצע %.2f (%+.0f%%), ציון %s" % (a["mean"], up, r2(a.get("score"))))
+    if tm and tm.get("share") is not None:
+        item("סטטיסטיקה (Time Machine)", True if tm["lean"] > 0 else False if tm["lean"] < 0 else None,
+             "ב-%s מתוך 5,000 הדמיות היעד הגיע לפני הסטופ (%s%% מההכרעות, איזון %s%%)" % (
+                 "%.0f%%" % tm["p_target"], tm["share"], tm["breakeven"]))
+    if sec:
+        recent = [f for f in sec.get("filings", []) if f.get("important")
+                  and (datetime.date.today() - datetime.date.fromisoformat(f["date"])).days <= 7]
+        if recent:
+            item("אין דיווח מהותי טרי ל-SEC", False, "%s ב-%s: %s" % (recent[0]["form"], recent[0]["date"], ", ".join(recent[0]["items_he"])))
     known = [x for x in items if x["ok"] is not None]
     passed = sum(1 for x in known if x["ok"])
     ratio = passed / len(known) if known else 0
@@ -360,6 +374,7 @@ def decision(tech, vol, fund, plan):
         WAIT = {"מגמה ראשית": "המחיר יחזור מעל ממוצע 50", "תעלת מגמה": "התעלה תתהפך לעולה או שהמחיר ירד לתחתית שלה",
                 "מומנטום (CCI + MACD)": "CCI יעלה מעל 0 ו-MACD יחצה מעל קו האות", "לא קנייה ביתר": "RSI ירד מתחת ל-70",
                 "נפח מאשר": "הנפח בימי עלייה יגבר על ימי הירידה", "מקום עד ההתנגדות": "המחיר יפרוץ את ההתנגדות הקרובה",
+                "סטטיסטיקה (Time Machine)": "הסטטיסטיקה של המניה תשתפר", "אין דיווח מהותי טרי ל-SEC": "יתבהר הדיווח החדש ל-SEC",
                 "אין דוח בשבוע הקרוב": "הדוח הכספי יעבור", "אנליסטים": "יעד האנליסטים ישתפר"}
         action = "לחכות עד ש" + ", ".join(WAIT.get(f, f) for f in fails[:3]) + "." if fails else "לחכות לאישור נוסף."
     else:
@@ -627,8 +642,6 @@ def ext_alerts(ext, plan):
         if ext["price"] <= plan["stop"]:
             out.append({"level": "bad", "text": "המחיר %s (%.2f) כבר מתחת לסטופ %.2f: התוכנית לא רלוונטית לפתיחה." % (
                 word, ext["price"], plan["stop"])})
-    if ext.get("vol_pct") and ext["vol_pct"] >= 10:
-        out.append({"level": "info", "text": "נפח ער %s: %s מניות, %.0f%% מנפח יום ממוצע." % (word, format(ext["volume"], ","), ext["vol_pct"])})
     return out
 
 
@@ -718,10 +731,33 @@ def analyze(sym, force=False):
         out["news"] = []
         out["errors"].append("חדשות לא זמינות (%s)" % (str(e)[:80] or "timeout"))
     out["verdict"] = verdict(base["tech"], out["fund"])
-    out["decision"] = decision(base["tech"], base["tech"]["volume"], out["fund"], out["plan"])
+    out["tm"] = get_tm(sym, base, out["plan"])
+    out["sec"] = None
+    ua = os.environ.get("SEC_USER_AGENT") or load_config().get("sec_user_agent")
+    if extras and ua and not DEMO:
+        try:
+            out["sec"] = extras.sec_block(sym, ua)
+        except Exception as e:
+            out["errors"].append("נתוני SEC לא זמינים (%s)" % str(e)[:80])
+    out["decision"] = decision(base["tech"], base["tech"]["volume"], out["fund"], out["plan"], out["tm"], out["sec"])
     out["decision"]["ext_alerts"] = ext_alerts(base.get("ext"), out["plan"])
     _full[sym] = (time.time(), out)
     return out
+
+
+_tm_cache = {}
+
+
+def get_tm(sym, base, plan):
+    if not extras or not plan:
+        return None
+    key = (sym, plan["trigger"], plan["stop"], plan["target"], base["as_of"])
+    if key not in _tm_cache:
+        try:
+            _tm_cache[key] = extras.time_machine(base["candles"], plan)
+        except Exception:
+            _tm_cache[key] = None
+    return _tm_cache[key]
 
 
 def quick(sym, force=False):
@@ -733,12 +769,16 @@ def quick(sym, force=False):
         f = (_fund_cache.get(sym) or (0, {}))[1] or {}
         an = f.get("analyst") or {}
         label = verdict(t, f if f else None)["label"]
-        dec = decision(t, t["volume"], f if f else None, trade_plan(t, load_config()))
+        pl = trade_plan(t, load_config())
+        tm = get_tm(sym, a, pl)
+        full = (_full.get(sym) or (0, {}))[1]
+        dec = decision(t, t["volume"], f if f else None, pl, tm, full.get("sec"))
         return {"symbol": sym, "price": t["price"], "change_1d": t["change_1d"], "change_1m": t["change_1m"],
                 "rsi": t["rsi"], "cci": t["cci"], "rvol": t["rvol"], "trend": t["trend"], "tech_score": t["tech_score"],
                 "verdict": label, "target_up": r2((an["mean"] / t["price"] - 1) * 100, 1) if an.get("mean") else None,
                 "spark": [x[4] for x in a["candles"][-60:]], "decision": dec["verdict"], "decision_code": dec["code"],
                 "decision_score": dec["score"], "channel": t["channel"]["kind"], "name": f.get("name"),
+                "tm": {"p_target": tm["p_target"], "lean": tm["lean"]} if tm else None,
                 "ext": {k: (a.get("ext") or {}).get(k) for k in ("session", "active", "price", "change", "gap", "volume", "vol_pct")}
                 if (a.get("ext") or {}).get("active") else None}
     except Exception as e:
