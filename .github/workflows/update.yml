@@ -2,9 +2,9 @@ name: Update dashboard
 
 on:
   schedule:
-    - cron: "7,37 8-20 * * 1-5"   # every 30 min while the US market is open (UTC)
-    - cron: "23 22 * * 1-5"        # once after the close
-  workflow_dispatch:                 # "Run workflow" button
+    - cron: "7,37 8-20 * * 1-5"   # every 30 min, pre-market (4:00 ET) to the close (UTC)
+    - cron: "23 22 * * 1-5"       # once after the close
+  workflow_dispatch:                # "Run workflow" button
   push:
     branches: [main]
 
@@ -25,7 +25,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install pdftotext (Congress reports)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils > /dev/null
+      - uses: actions/cache@v4
+        with:
+          path: cache
+          key: data-${{ github.run_id }}
+          restore-keys: data-
       - run: python build.py
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
