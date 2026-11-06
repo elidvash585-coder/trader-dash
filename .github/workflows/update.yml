@@ -26,7 +26,10 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install pdftotext (Congress reports)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils > /dev/null
+        run: |
+          which pdftotext && exit 0
+          sudo rm -f /var/lib/man-db/auto-update
+          sudo apt-get install -y -qq --no-install-recommends poppler-utils > /dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends poppler-utils > /dev/null)
       - uses: actions/cache@v4
         with:
           path: cache
