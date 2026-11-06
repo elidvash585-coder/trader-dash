@@ -575,6 +575,63 @@ def chart(sym):
     return res.get("meta", {}), rows
 
 
+def extended(sym, avg_vol=None):
+    """Pre-market / after-hours snapshot from today's 5-minute bars (Yahoo includePrePost)."""
+    doc = yahoo("/v8/finance/chart/%s?range=1d&interval=5m&includePrePost=true" % ysym(sym))
+    res = doc["chart"]["result"][0]
+    meta = res.get("meta", {})
+    if meta.get("instrumentType") in ("CRYPTOCURRENCY",):
+        return None
+    tp = meta.get("currentTradingPeriod") or {}
+    q = res["indicators"]["quote"][0]
+    ts = res.get("timestamp") or []
+    now = time.time()
+    pre, reg, post = tp.get("pre") or {}, tp.get("regular") or {}, tp.get("post") or {}
+    if pre.get("start") and pre["start"] <= now < pre.get("end", 0):
+        session, lo_t, hi_t = "pre", pre["start"], pre["end"]
+    elif reg.get("start") and reg["start"] <= now < reg.get("end", 0):
+        session, lo_t, hi_t = "regular", reg["start"], reg["end"]
+    elif post.get("start") and post["start"] <= now < post.get("end", 0):
+        session, lo_t, hi_t = "post", post["start"], post["end"]
+    else:
+        # market closed (night / weekend): show the latest after-hours of the last session, if any
+        session, lo_t, hi_t = "post", post.get("start", 0), post.get("end", 0)
+    bars = [(ts[i], q["close"][i], q["high"][i], q["low"][i], q["volume"][i] or 0)
+            for i in range(len(ts)) if lo_t <= ts[i] < hi_t and q["close"][i] is not None]
+    if session == "regular" or not bars:
+        return {"session": session, "active": False}
+    prev = meta.get("regularMarketPrice")  # until the open this is still the last regular close
+    price = bars[-1][1]
+    vol = sum(b[4] for b in bars)
+    chg = (price / prev - 1) * 100 if prev else None
+    return {"session": session, "active": True, "label": "Pre-market" if session == "pre" else "After-hours",
+            "price": r2(price), "ref": r2(prev), "change": r2(chg), "high": r2(max(b[2] or b[1] for b in bars)),
+            "low": r2(min(b[3] or b[1] for b in bars)), "volume": int(vol),
+            "vol_pct": r2(vol / avg_vol * 100, 1) if avg_vol else None, "gap": chg is not None and abs(chg) >= 3,
+            "time": datetime.datetime.utcfromtimestamp(bars[-1][0]).strftime("%H:%M UTC"),
+            "series": [[b[0], r2(b[1])] for b in bars]}
+
+
+def ext_alerts(ext, plan):
+    out = []
+    if not ext or not ext.get("active"):
+        return out
+    word = "ב-pre-market" if ext["session"] == "pre" else "במסחר המאוחר"
+    if ext.get("gap"):
+        out.append({"level": "warn", "text": "פער %s: המחיר %s %+.1f%% מהסגירה (%.2f)." % (
+            "למעלה" if ext["change"] > 0 else "למטה", word, ext["change"], ext["price"])})
+    if plan:
+        if ext["price"] >= plan["trigger"]:
+            out.append({"level": "warn", "text": "המחיר %s (%.2f) כבר מעל נקודת הכניסה %.2f. כניסה בפער מגדילה את הסיכון עד הסטופ." % (
+                word, ext["price"], plan["trigger"])})
+        if ext["price"] <= plan["stop"]:
+            out.append({"level": "bad", "text": "המחיר %s (%.2f) כבר מתחת לסטופ %.2f: התוכנית לא רלוונטית לפתיחה." % (
+                word, ext["price"], plan["stop"])})
+    if ext.get("vol_pct") and ext["vol_pct"] >= 10:
+        out.append({"level": "info", "text": "נפח ער %s: %s מניות, %.0f%% מנפח יום ממוצע." % (word, format(ext["volume"], ","), ext["vol_pct"])})
+    return out
+
+
 def verdict(tech, fund):
     """A plain-language summary built from rules. Not advice."""
     parts, pts = [], 0
@@ -620,7 +677,11 @@ def tech_part(sym, force=False):
     o, h, l, c, v = ([float(r[i] or 0) for r in rows] for i in range(1, 6))
     tech = technicals(t, o, h, l, c, v)
     tech["volume"] = volume_analysis(t, o, h, l, c, v)
-    out = {"symbol": sym, "as_of": datetime.datetime.utcfromtimestamp(t[-1]).strftime("%Y-%m-%d"),
+    try:
+        ext = demo_ext(sym, c[-1], tech["volume"]["avg20"]) if DEMO else extended(sym, tech["volume"]["avg20"])
+    except Exception:
+        ext = None
+    out = {"ext": ext, "symbol": sym, "as_of": datetime.datetime.utcfromtimestamp(t[-1]).strftime("%Y-%m-%d"),
            "fetched": datetime.datetime.now().strftime("%H:%M"), "market_price": meta.get("regularMarketPrice"),
            "candles": [[t[i], r2(o[i]), r2(h[i]), r2(l[i]), r2(c[i]), int(v[i])] for i in range(len(t))], "tech": tech}
     _cache[sym] = (time.time(), out)
@@ -658,6 +719,7 @@ def analyze(sym, force=False):
         out["errors"].append("חדשות לא זמינות (%s)" % (str(e)[:80] or "timeout"))
     out["verdict"] = verdict(base["tech"], out["fund"])
     out["decision"] = decision(base["tech"], base["tech"]["volume"], out["fund"], out["plan"])
+    out["decision"]["ext_alerts"] = ext_alerts(base.get("ext"), out["plan"])
     _full[sym] = (time.time(), out)
     return out
 
@@ -676,7 +738,9 @@ def quick(sym, force=False):
                 "rsi": t["rsi"], "cci": t["cci"], "rvol": t["rvol"], "trend": t["trend"], "tech_score": t["tech_score"],
                 "verdict": label, "target_up": r2((an["mean"] / t["price"] - 1) * 100, 1) if an.get("mean") else None,
                 "spark": [x[4] for x in a["candles"][-60:]], "decision": dec["verdict"], "decision_code": dec["code"],
-                "decision_score": dec["score"], "channel": t["channel"]["kind"], "name": f.get("name")}
+                "decision_score": dec["score"], "channel": t["channel"]["kind"], "name": f.get("name"),
+                "ext": {k: (a.get("ext") or {}).get(k) for k in ("session", "active", "price", "change", "gap", "volume", "vol_pct")}
+                if (a.get("ext") or {}).get("active") else None}
     except Exception as e:
         return {"symbol": sym, "error": str(e)[:120]}
 
@@ -727,6 +791,18 @@ def demo_fund(sym, price):
             "next_earnings": (datetime.date.today() + datetime.timedelta(days=rnd.randint(3, 80))).isoformat(),
             "quarterly": [{"q": q, "revenue": rnd.uniform(5e9, 3e10) * (1 + i * 0.05), "earnings": rnd.uniform(5e8, 6e9)} for i, q in enumerate(qs)],
             "eps_history": [{"q": q, "actual": rnd.uniform(1, 3), "estimate": rnd.uniform(1, 3), "surprise": rnd.uniform(-0.1, 0.2)} for q in qs]}
+
+
+def demo_ext(sym, close, avg):
+    rnd = random.Random(sym + "x")
+    chg = rnd.gauss(0, 2.2)
+    t0 = int(time.time()) - 3 * 3600
+    series = [[t0 + i * 300, round(close * (1 + chg / 100 * i / 30 + rnd.gauss(0, .002)), 2)] for i in range(31)]
+    vol = int(avg * rnd.uniform(0.01, 0.15))
+    return {"session": "pre", "active": True, "label": "Pre-market", "price": series[-1][1], "ref": round(close, 2),
+            "change": round((series[-1][1] / close - 1) * 100, 2), "high": max(x[1] for x in series), "low": min(x[1] for x in series),
+            "volume": vol, "vol_pct": round(vol / avg * 100, 1), "gap": abs(series[-1][1] / close - 1) >= .03,
+            "time": "12:35 UTC", "series": series}
 
 
 def demo_news(sym):

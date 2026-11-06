@@ -142,6 +142,13 @@ td.n{font-family:var(--mono);direction:ltr;text-align:left}
 .perf div{text-align:center;padding:10px 4px;border-radius:8px;background:var(--bg2)}
 .perf label{font-size:11px;color:var(--dim)}.perf b{display:block;font-family:var(--mono);font-size:14px;margin-top:2px}
 .static .wr .x{display:none!important}
+.extc{display:inline-block;font-family:var(--mono);font-size:10.5px;padding:0 5px;border-radius:4px;margin-top:2px;background:rgba(140,99,255,.14);color:#b9a2ff}
+.extc.gap{background:rgba(245,176,65,.16);color:var(--warn);font-weight:700}
+.extpill{display:inline-flex;gap:6px;align-items:baseline;padding:3px 10px;border-radius:8px;background:rgba(140,99,255,.12);border:1px solid rgba(140,99,255,.35);font-size:12px;color:#c9b8ff}
+.extpill b{font-family:var(--mono);font-size:14px;color:#fff;direction:ltr}
+.exts{background:linear-gradient(135deg,rgba(140,99,255,.12),transparent);}
+.al{display:grid;gap:6px;margin-top:10px}.al div{padding:7px 10px;border-radius:8px;font-size:12.5px;line-height:1.45;border-right:3px solid}
+.al .warn{background:rgba(245,176,65,.08);border-color:var(--warn);color:#f3d6a0}.al .bad{background:rgba(240,80,110,.08);border-color:var(--down);color:#f6b3c1}.al .info{background:rgba(61,123,253,.08);border-color:var(--acc);color:#c3d3ff}
 </style>
 </head>
 <body>
@@ -167,7 +174,7 @@ td.n{font-family:var(--mono);direction:ltr;text-align:left}
       <div class="row static-hide"><input id="addInp" placeholder="הוסף טיקר (MSFT)" onkeydown="if(event.key==='Enter')addSym()"><button onclick="addSym()">+</button></div>
       <div class="row" style="justify-content:space-between">
         <div class="flt" id="flt"></div>
-        <select id="sortSel" onchange="state.sort=this.value;renderWL()"><option value="list">סדר שלי</option><option value="dec">לפי המלצה</option><option value="chg">לפי שינוי</option><option value="sym">א-ב</option></select>
+        <select id="sortSel" onchange="state.sort=this.value;renderWL()"><option value="list">סדר שלי</option><option value="dec">לפי המלצה</option><option value="chg">לפי שינוי</option><option value="ext">לפי pre-market</option><option value="sym">א-ב</option></select>
       </div>
     </div>
     <div class="wlcols"><span>מניה</span><span style="text-align:left">מחיר</span><span style="text-align:center">המלצה</span></div>
@@ -229,13 +236,14 @@ function renderWL(){
   const rank={go:0,wait:1,no:2};
   if(state.sort==='dec')rows=[...rows].sort((a,b)=>(rank[a.decision_code]??3)-(rank[b.decision_code]??3)||(b.decision_score||0)-(a.decision_score||0));
   if(state.sort==='chg')rows=[...rows].sort((a,b)=>(b.change_1d??-99)-(a.change_1d??-99));
+  if(state.sort==='ext')rows=[...rows].sort((a,b)=>Math.abs(b.ext?.change??0)-Math.abs(a.ext?.change??0));
   if(state.sort==='sym')rows=[...rows].sort((a,b)=>a.symbol.localeCompare(b.symbol));
   $('#wlist').innerHTML=rows.map(r=>{const sel=r.symbol===state.sel?'sel':'';
     const x=`<span class="x" title="הסר" onclick="event.stopPropagation();rmSym('${r.symbol}')">✕</span>`;
     if(r.loading)return `<div class="wr ${sel}" onclick="select('${r.symbol}')"><div class="s"><b>${r.symbol}</b><small>טוען...</small></div><div class="p dim">···</div><div class="rec ld">···</div>${x}</div>`;
     if(r.error)return `<div class="wr ${sel}" onclick="select('${r.symbol}')"><div class="s"><b>${r.symbol}</b><small class="warn">אין נתונים</small></div><div class="p dim">—</div><div class="rec ld">—</div>${x}</div>`;
     return `<div class="wr ${sel}" onclick="select('${r.symbol}')"><div class="s"><b>${r.symbol}</b><small>${r.name||('תעלה '+r.channel)}</small></div>
-      <div class="p">${fmt(r.price)}<small class="${cls(r.change_1d)}">${pct(r.change_1d)}</small></div>
+      <div class="p">${fmt(r.price)}<small class="${cls(r.change_1d)}">${pct(r.change_1d)}</small>${r.ext?`<span class="extc ${r.ext.gap?'gap':''}" title="${r.ext.session==='pre'?'Pre-market':'After-hours'} ${fmt(r.ext.price)}">${r.ext.gap?'⚡':''}${r.ext.session==='pre'?'PM':'AH'} ${pct(r.ext.change,1)}</span>`:''}</div>
       <div class="rec ${r.decision_code}" title="${r.decision} · ${r.decision_score}% מהכללים">${DEC[r.decision_code]}</div>${x}</div>`}).join('');
   $('#wlsum').innerHTML=`<span><b class="up">${cnt.go}</b> כניסה · <b class="warn">${cnt.wait}</b> להמתין · <b class="down">${cnt.no}</b> לא</span><span>${state.rows.some(r=>r.loading)?'טוען...':''}</span>`}
 async function addSym(){const v=$('#addInp').value.trim().toUpperCase();if(!v)return;const wl=await api('/api/watchlist');if(!wl.symbols.includes(v))wl.symbols.push(v);await post('/api/watchlist',wl);$('#addInp').value='';state.sel=v;loadList()}
@@ -251,7 +259,7 @@ function renderAll(){renderHeader();renderInfo();renderBottom();drawChart();draw
 
 function renderHeader(){const d=state.data,t=d.tech,f=d.fund||{};const c=d.candles[d.candles.length-1];
   $('#sh').innerHTML=`<h1>${d.symbol}</h1><span class="nm">${f.name||''}${f.exchange?' · '+f.exchange:''}</span>
-  <span class="px">${fmt(t.price)}</span><span class="chg ${cls(t.change_1d)}">${pct(t.change_1d)}</span>
+  <span class="px">${fmt(t.price)}</span><span class="chg ${cls(t.change_1d)}">${pct(t.change_1d)}</span>${d.ext&&d.ext.active?`<span class="extpill">${d.ext.label} <b>${fmt(d.ext.price)}</b><span class="num ${cls(d.ext.change)}">${pct(d.ext.change)}</span></span>`:''}
   <span class="num dim" style="font-size:11.5px">O ${fmt(c[1])} H ${fmt(c[2])} L ${fmt(c[3])} · Vol ${big(c[5])}</span><span class="sp"></span>
   <div class="tb">${['3M','6M','1Y','2Y'].map(r=>`<button class="${state.range===r?'on':''}" onclick="state.range='${r}';renderHeader();drawChart();drawInd()">${r}</button>`).join('')}<span class="sep"></span>
   <button class="${state.sma?'on':''}" onclick="state.sma=!state.sma;renderHeader();drawChart()">ממוצעים</button><button class="${state.chan?'on':''}" onclick="state.chan=!state.chan;renderHeader();drawChart()">תעלה</button></div>`;
@@ -263,12 +271,20 @@ function chanSvg(ch){const k=ch.kind,dy=k==='עולה'?-18:k==='יורדת'?18:0
   return `<svg width="86" height="60" viewBox="0 0 86 60"><path d="M4 ${y0-14} L82 ${y1-14}" stroke="${c}" stroke-width="1.5" opacity=".7"/><path d="M4 ${y0} L82 ${y1}" stroke="${c}" stroke-dasharray="3 3" opacity=".5"/><path d="M4 ${y0+14} L82 ${y1+14}" stroke="${c}" stroke-width="1.5" opacity=".7"/><circle cx="78" cy="${Math.max(4,Math.min(56,py)).toFixed(1)}" r="4.5" fill="#fff"/></svg>`}
 const cciTxt=v=>v>200?'קיצון עליון':v>100?'מומנטום חזק':v>0?'חיובי':v>-100?'שלילי':v>-200?'חולשה':'קיצון תחתון';
 const rsiTxt=v=>v>=70?'קנייה ביתר':v<=30?'מכירת יתר':v>=55?'חיובי':v<=45?'שלילי':'ניטרלי';
+function extSec(d){const e=d.ext;if(!e||!e.active)return'';const al=(d.decision.ext_alerts||[]);
+  return `<div class="sec exts"><h4>${e.label} <span class="dim num">${e.time}</span></h4>
+   <div style="display:flex;align-items:baseline;gap:10px"><b class="num" style="font-size:22px">${fmt(e.price)}</b><b class="num ${cls(e.change)}" style="font-size:15px">${pct(e.change)}</b>${e.gap?'<span class="rec wait" style="padding:2px 8px">פער</span>':''}</div>
+   <div class="dim" style="font-size:11.5px;margin:2px 0 10px">לעומת סגירה ${fmt(e.ref)}</div>
+   <div class="kvs"><div><label>טווח</label><b>${fmt(e.low)} – ${fmt(e.high)}</b></div><div><label>נפח</label><b>${big(e.volume)}${e.vol_pct!=null?' · '+fmt(e.vol_pct,0)+'%':''}</b></div></div>
+   ${al.length?`<div class="al">${al.map(a=>`<div class="${a.level}">${a.text}</div>`).join('')}</div>`:''}
+   <div class="dim" style="font-size:11px;margin-top:8px">במסחר מחוץ לשעות יש מעט נפח, והמחירים קופצים יותר.</div></div>`}
 function renderInfo(){const d=state.data,t=d.tech,ch=t.channel,dc=d.decision,p=d.plan,f=d.fund||{},a=f.analyst||{};
   const up=a.mean?(a.mean/t.price-1)*100:null;const dist=x=>pct((x/t.price-1)*100,1);const col=dc.code==='go'?'#26c99a':dc.code==='wait'?'#f5b041':'#f0506e';
   let h=(d.errors||[]).map(e=>`<div class="err">${e}</div>`).join('');
   h+=`<div class="sec"><div class="dec ${dc.code}"><div class="v"><div><div class="mute" style="font-size:12px">האם להיכנס?</div><b>${dc.verdict}</b></div>
      <svg width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#232b3a" stroke-width="7"/><circle cx="32" cy="32" r="26" fill="none" stroke="${col}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${(dc.score/100*163.4).toFixed(1)} 200" transform="rotate(-90 32 32)"/><text x="32" y="37" text-anchor="middle" fill="#e3e8f1" font-family="JetBrains Mono" font-size="15" font-weight="600">${dc.passed}/${dc.total}</text></svg></div>
-     <p>${dc.action}</p></div></div>
+     <p>${dc.action}</p>${(dc.ext_alerts||[]).some(a=>a.level!=='info')?'<p class="warn" style="font-size:12px;margin-top:6px">⚠ יש התראת '+(d.ext.session==='pre'?'pre-market':'after-hours')+', ראה למטה.</p>':''}</div></div>
+  ${extSec(d)}
   <div class="sec"><h4>בדיקת הכללים</h4><ul class="chk">${dc.items.map(i=>`<li class="${i.ok?'ok':'bad'}"><i>${i.ok?'✓':'✕'}</i><span>${i.label}<small>${i.detail}</small></span></li>`).join('')}</ul></div>
   <div class="sec"><h4>מגמה ותעלה</h4><div class="chan">${chanSvg(ch)}<div><b style="font-size:16px" class="${ch.kind==='עולה'?'up':ch.kind==='יורדת'?'down':'warn'}">תעלה ${ch.kind}</b>
      <div class="mute" style="margin-top:3px"><span class="num">${pct(ch.move_pct,1)}</span> ב-${ch.days} ימים · ${ch.where}</div><div class="dim" style="font-size:11.5px;margin-top:2px">גבולות: <span class="num">${fmt(ch.lower)} – ${fmt(ch.upper)}</span></div></div></div>
@@ -364,6 +380,7 @@ function drawChart(){const d=state.data;if(!d)return;const el=$('#chart');if(mai
   t.support.forEach((x,i)=>cs.createPriceLine({price:x.price,color:'rgba(38,201,154,.55)',lineWidth:1,lineStyle:2,title:'S'+(i+1)}));
   t.resistance.forEach((x,i)=>cs.createPriceLine({price:x.price,color:'rgba(240,80,110,.55)',lineWidth:1,lineStyle:2,title:'R'+(i+1)}));
   if(d.plan)cs.createPriceLine({price:d.plan.trigger,color:'#3d7bfd',lineWidth:1,title:'Entry'});
+  if(d.ext&&d.ext.active)cs.createPriceLine({price:d.ext.price,color:'#b9a2ff',lineWidth:2,lineStyle:1,title:d.ext.session==='pre'?'PM':'AH'});
   mainC.timeScale().fitContent();
   mainC.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(r&&indC)indC.timeScale().setVisibleLogicalRange(r)})}
 function drawInd(){const d=state.data;if(!d)return;const el=$('#indC');if(indC){indC.remove();indC=null}
