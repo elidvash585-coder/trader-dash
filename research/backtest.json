@@ -1,0 +1,416 @@
+{
+ "generated": "2026-11-06 14:06 UTC",
+ "demo": false,
+ "method": {
+  "horizon": 20,
+  "target_r": 2.0,
+  "atr_stop": 1.0
+ },
+ "baseline": {
+  "n": 42694,
+  "symbols": 89,
+  "failed": [],
+  "win": 36.3,
+  "R": 0.063,
+  "breakeven_win": 33.3,
+  "from": "2022-11-08",
+  "to": "2026-10-06",
+  "split": "2025-03-17"
+ },
+ "rules": [
+  {
+   "rule": "trend",
+   "name": "מגמה ראשית",
+   "share_pass": 41.0,
+   "win_pass": 35.3,
+   "win_fail": 37.0,
+   "R_pass": 0.028,
+   "R_fail": 0.088,
+   "R_diff": -0.06,
+   "R_diff_ci": [
+    -0.144,
+    0.027
+   ],
+   "significant": false,
+   "R_diff_train": -0.078,
+   "R_diff_test": -0.037,
+   "stable": "True"
+  },
+  {
+   "rule": "channel",
+   "name": "תעלת מגמה",
+   "share_pass": 53.0,
+   "win_pass": 35.5,
+   "win_fail": 37.2,
+   "R_pass": 0.041,
+   "R_fail": 0.089,
+   "R_diff": -0.049,
+   "R_diff_ci": [
+    -0.15,
+    0.058
+   ],
+   "significant": false,
+   "R_diff_train": -0.056,
+   "R_diff_test": -0.042,
+   "stable": "True"
+  },
+  {
+   "rule": "momentum",
+   "name": "מומנטום (CCI + MACD)",
+   "share_pass": 44.6,
+   "win_pass": 35.9,
+   "win_fail": 36.6,
+   "R_pass": 0.045,
+   "R_fail": 0.078,
+   "R_diff": -0.033,
+   "R_diff_ci": [
+    -0.129,
+    0.073
+   ],
+   "significant": false,
+   "R_diff_train": -0.015,
+   "R_diff_test": -0.061,
+   "stable": "True"
+  },
+  {
+   "rule": "not_overbought",
+   "name": "לא קנייה ביתר (RSI<70)",
+   "share_pass": 90.4,
+   "win_pass": 36.3,
+   "win_fail": 36.5,
+   "R_pass": 0.064,
+   "R_fail": 0.054,
+   "R_diff": 0.01,
+   "R_diff_ci": [
+    -0.098,
+    0.107
+   ],
+   "significant": false,
+   "R_diff_train": 0.062,
+   "R_diff_test": -0.079,
+   "stable": "False"
+  },
+  {
+   "rule": "volume",
+   "name": "נפח מאשר",
+   "share_pass": 57.2,
+   "win_pass": 36.1,
+   "win_fail": 36.5,
+   "R_pass": 0.051,
+   "R_fail": 0.08,
+   "R_diff": -0.029,
+   "R_diff_ci": [
+    -0.09,
+    0.029
+   ],
+   "significant": false,
+   "R_diff_train": -0.038,
+   "R_diff_test": -0.019,
+   "stable": "True"
+  },
+  {
+   "rule": "room",
+   "name": "מקום עד ההתנגדות",
+   "share_pass": 46.0,
+   "win_pass": 36.3,
+   "win_fail": 36.3,
+   "R_pass": 0.069,
+   "R_fail": 0.059,
+   "R_diff": 0.01,
+   "R_diff_ci": [
+    -0.044,
+    0.059
+   ],
+   "significant": false,
+   "R_diff_train": -0.011,
+   "R_diff_test": 0.042,
+   "stable": "False"
+  }
+ ],
+ "equal_weight": {
+  "by_count": [
+   {
+    "passed": 1,
+    "n": 857,
+    "win": 34.1,
+    "R": 0.009
+   },
+   {
+    "passed": 2,
+    "n": 4545,
+    "win": 35.6,
+    "R": 0.085
+   },
+   {
+    "passed": 3,
+    "n": 5001,
+    "win": 34.8,
+    "R": 0.041
+   },
+   {
+    "passed": 4,
+    "n": 3798,
+    "win": 36.4,
+    "R": 0.064
+   },
+   {
+    "passed": 5,
+    "n": 2305,
+    "win": 33.7,
+    "R": -0.013
+   },
+   {
+    "passed": 6,
+    "n": 752,
+    "win": 31.9,
+    "R": -0.082
+   }
+  ],
+  "auc_test": 0.496
+ },
+ "models": {
+  "rules": {
+   "auc_train": 0.518,
+   "auc_test": 0.5,
+   "coef": [
+    {
+     "feature": "trend",
+     "name": "מגמה ראשית",
+     "weight": -0.04
+    },
+    {
+     "feature": "channel",
+     "name": "תעלת מגמה",
+     "weight": -0.033
+    },
+    {
+     "feature": "room",
+     "name": "מקום עד ההתנגדות",
+     "weight": -0.013
+    },
+    {
+     "feature": "volume",
+     "name": "נפח מאשר",
+     "weight": -0.011
+    },
+    {
+     "feature": "not_overbought",
+     "name": "לא קנייה ביתר (RSI<70)",
+     "weight": 0.003
+    },
+    {
+     "feature": "momentum",
+     "name": "מומנטום (CCI + MACD)",
+     "weight": 0.001
+    }
+   ],
+   "buckets_test": [
+    {
+     "bucket": 1,
+     "n": 3452,
+     "win": 35.4,
+     "R": 0.037
+    },
+    {
+     "bucket": 2,
+     "n": 3451,
+     "win": 35.5,
+     "R": 0.039
+    },
+    {
+     "bucket": 3,
+     "n": 3452,
+     "win": 33.4,
+     "R": 0.009
+    },
+    {
+     "bucket": 4,
+     "n": 3451,
+     "win": 37.3,
+     "R": 0.134
+    },
+    {
+     "bucket": 5,
+     "n": 3452,
+     "win": 33.6,
+     "R": -0.003
+    }
+   ]
+  },
+  "full": {
+   "auc_train": 0.534,
+   "auc_test": 0.502,
+   "coef": [
+    {
+     "feature": "d_s50",
+     "name": "מרחק מממוצע 50",
+     "weight": -0.207
+    },
+    {
+     "feature": "ch_move",
+     "name": "שיפוע התעלה",
+     "weight": 0.14
+    },
+    {
+     "feature": "ch_pos",
+     "name": "מיקום בתעלה",
+     "weight": 0.108
+    },
+    {
+     "feature": "cci",
+     "name": "CCI",
+     "weight": -0.067
+    },
+    {
+     "feature": "room_r",
+     "name": "מקום עד התנגדות (R)",
+     "weight": -0.063
+    },
+    {
+     "feature": "rsi",
+     "name": "RSI",
+     "weight": 0.05
+    },
+    {
+     "feature": "macd_h",
+     "name": "MACD מול אות",
+     "weight": 0.041
+    },
+    {
+     "feature": "ret20",
+     "name": "תשואה 20 ימים",
+     "weight": 0.025
+    },
+    {
+     "feature": "d_hi52",
+     "name": "מרחק משיא שנתי",
+     "weight": -0.023
+    },
+    {
+     "feature": "ret5",
+     "name": "תשואה 5 ימים",
+     "weight": 0.022
+    },
+    {
+     "feature": "trend",
+     "name": "מגמה ראשית",
+     "weight": -0.021
+    },
+    {
+     "feature": "room",
+     "name": "מקום עד ההתנגדות",
+     "weight": 0.019
+    },
+    {
+     "feature": "updown",
+     "name": "נפח עלייה/ירידה",
+     "weight": 0.018
+    },
+    {
+     "feature": "atr_pct",
+     "name": "תנודתיות (ATR%)",
+     "weight": 0.013
+    },
+    {
+     "feature": "momentum",
+     "name": "מומנטום (CCI + MACD)",
+     "weight": -0.009
+    },
+    {
+     "feature": "rvol",
+     "name": "נפח יחסי",
+     "weight": 0.008
+    },
+    {
+     "feature": "volume",
+     "name": "נפח מאשר",
+     "weight": -0.006
+    },
+    {
+     "feature": "obv20",
+     "name": "שינוי OBV",
+     "weight": -0.006
+    },
+    {
+     "feature": "d_s200",
+     "name": "מרחק מממוצע 200",
+     "weight": -0.002
+    },
+    {
+     "feature": "not_overbought",
+     "name": "לא קנייה ביתר (RSI<70)",
+     "weight": 0.001
+    },
+    {
+     "feature": "channel",
+     "name": "תעלת מגמה",
+     "weight": -0.0
+    }
+   ],
+   "buckets_test": [
+    {
+     "bucket": 1,
+     "n": 3452,
+     "win": 35.4,
+     "R": 0.031
+    },
+    {
+     "bucket": 2,
+     "n": 3451,
+     "win": 35.7,
+     "R": 0.066
+    },
+    {
+     "bucket": 3,
+     "n": 3452,
+     "win": 33.7,
+     "R": -0.002
+    },
+    {
+     "bucket": 4,
+     "n": 3451,
+     "win": 33.4,
+     "R": -0.002
+    },
+    {
+     "bucket": 5,
+     "n": 3452,
+     "win": 36.9,
+     "R": 0.121
+    }
+   ]
+  },
+  "equal_weight_buckets_test": [
+   {
+    "bucket": 1,
+    "n": 3452,
+    "win": 35.0,
+    "R": 0.063
+   },
+   {
+    "bucket": 2,
+    "n": 3451,
+    "win": 36.0,
+    "R": 0.083
+   },
+   {
+    "bucket": 3,
+    "n": 3452,
+    "win": 34.3,
+    "R": 0.025
+   },
+   {
+    "bucket": 4,
+    "n": 3451,
+    "win": 36.4,
+    "R": 0.061
+   },
+   {
+    "bucket": 5,
+    "n": 3452,
+    "win": 33.6,
+    "R": -0.017
+   }
+  ]
+ }
+}
