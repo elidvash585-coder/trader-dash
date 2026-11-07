@@ -35,6 +35,8 @@ jobs:
           path: cache
           key: data-${{ github.run_id }}
           restore-keys: data-
+      - name: Unit tests (the site is not rebuilt if they fail)
+        run: python -m unittest discover -s tests
       - run: python build.py
         env:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
