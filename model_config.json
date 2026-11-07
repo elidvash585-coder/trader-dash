@@ -1,0 +1,13 @@
+{
+ "version": "2.0-stage1",
+ "notes": "Weights are a starting proposal, NOT a research result. Change them here; no code change needed.",
+ "indicator_score": {
+  "weights": {"trend": 25, "momentum": 20, "volume": 15, "fundamentals": 15, "market": 15, "entry": 10},
+  "min_coverage": 0.6,
+  "labels": [[6.5, "חיובי"], [5.5, "חיובי קל"], [4.5, "ניטרלי"], [3.5, "שלילי קל"], [0, "שלילי"]]
+ },
+ "regime": {"risk_on_min": 3.0, "risk_off_max": -1.5},
+ "historical_score": {"shrink_k": 500, "span_R": 0.30, "min_n_eff": 100, "cap_if_ci_has_zero": 6.4,
+                      "cap_if_recent_opposite": 5.5, "cap_if_blocked": 5.0},
+ "decision": {"min_hist": 5.6, "min_rr": 2.0}
+}

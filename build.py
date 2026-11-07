@@ -38,7 +38,7 @@ def main():
         try:
             a = D.analyze(sym)
             a["congress"] = cg.get(sym, []) if "_note" not in cg else None
-            a["ind_score"] = D.ind_score(a["tech"], a["plan"], a["fund"], a.get("tm"), a["congress"])
+            a["ind_score"] = D.ind_score(a["tech"], a["plan"], a["fund"], a.get("tm"), a["congress"], sector=a.get("sector"))
             with open(os.path.join(OUT, "data", safe(sym) + ".json"), "w", encoding="utf-8") as fh:
                 json.dump(a, fh, ensure_ascii=False, separators=(",", ":"))
             q = D.quick(sym)

@@ -29,6 +29,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import features as FX  # noqa: E402  (v2 engine, standard library only)
+import market as MK  # noqa: E402
+import engine as EN  # noqa: E402
 try:
     import extras  # time machine, SEC, Congress (day-trader-skill)
 except Exception:
@@ -566,8 +569,8 @@ def _cl(x):
     return max(0.0, min(10.0, x))
 
 
-def ind_score(tech, plan=None, fund=None, tm=None, congress=None):
-    """Second score: every other indicator, equal weights, 0-10 each, averaged. NOT validated:
+def ind_score_v1(tech, plan=None, fund=None, tm=None, congress=None):
+    """OLD second score (v1, kept for comparison): every other indicator, equal weights, 0-10 each, averaged. NOT validated:
     in the backtest these did not improve the forecast. Shown so the user can weigh them himself."""
     comp = []
 
@@ -624,6 +627,94 @@ def ind_score(tech, plan=None, fund=None, tm=None, congress=None):
     val = round(sum(c["value"] for c in comp) / len(comp), 1)
     return {"value": val, "components": comp, "n": len(comp),
             "label": "חיובי" if val >= 6.5 else "חיובי קל" if val >= 5.5 else "ניטרלי" if val >= 4.5 else "שלילי קל" if val >= 3.5 else "שלילי"}
+
+
+_mkt = {"t": 0, "ctx": None}
+_etf_cache = {}
+
+
+def market_ctx():
+    """SPY / QQQ / VIX context, cached 30 minutes."""
+    if _mkt["ctx"] is None or time.time() - _mkt["t"] > 1800:
+        _mkt["ctx"] = MK.context(demo_chart if DEMO else chart, EN.CFG.get("regime"))
+        _mkt["t"] = time.time()
+    return _mkt["ctx"]
+
+
+def etf_rows(sym):
+    hit = _etf_cache.get(sym)
+    if hit and time.time() - hit[0] < 1800:
+        return hit[1]
+    _, rows = demo_chart(sym) if DEMO else chart(sym)
+    _etf_cache[sym] = (time.time(), rows)
+    return rows
+
+
+def fx_block(t, o, h, l, c, v, partial):
+    """v2 features on CLOSED bars only (a bar still trading is left out), plus chart overlays."""
+    if partial and len(c) > 60:
+        t, o, h, l, c, v = t[:-1], o[:-1], h[:-1], l[:-1], c[:-1], v[:-1]
+    bench = {}
+    try:
+        m = market_ctx()
+        if m.get("spy"):
+            bench["SPY"] = FX.align(t, m["spy"]["t"], m["spy"]["c"])
+        if m.get("qqq"):
+            bench["QQQ"] = FX.align(t, m["qqq"]["t"], m["qqq"]["c"])
+    except Exception:
+        m = {}
+    f = FX.compute(t, o, h, l, c, v, bench)
+    keys = ["atr", "sma20", "sma50", "sma150", "sma200", "slope50", "adx", "pdi", "ndi", "rsi", "cci", "macd_h",
+            "atr_pct", "atr_pctile", "rv20", "state", "bos_up", "bos_dn", "failed_bo", "res", "swing_low", "last_ph",
+            "consol", "ext_atr", "room_atr", "rvol", "updown", "obv20", "clv", "gap", "ret20", "ret60", "ret120",
+            "d_sma20", "d_sma50", "d_sma150", "d_sma200"] + [k for k in f if k.startswith("rs_")]
+    x = {k: FX.last(f, k) for k in keys}
+    x["price"] = c[-1]
+    x["chg1"] = (c[-1] / c[-2] - 1) * 100 if len(c) > 1 else None
+    x["regime"] = ((m or {}).get("regime") or {}).get("code")
+    x["bar_partial_excluded"] = bool(partial)
+    # chart overlays (off by default in the UI): anchored VWAPs and an approximate volume profile
+    ph, pl = FX.pivots(h, l)
+    lows = [j for j in range(max(0, len(c) - 130), len(c) - FX.K_PIVOT) if pl[j]]
+    anchor_low = min(lows, key=lambda j: l[j]) if lows else None
+    anchor_hi = max(range(max(0, len(c) - 252), len(c)), key=lambda j: h[j])
+    ov = {}
+    for name, a in (("avwap_low", anchor_low), ("avwap_high", anchor_hi)):
+        if a is not None:
+            s_ = FX.avwap(h, l, c, v, a)
+            ov[name] = {"anchor": t[a], "series": [[t[i], round(s_[i], 2)] for i in range(a, len(c))]}
+    ov["vprofile"] = FX.volume_profile(h, l, v)
+    return x, ov
+
+
+def ind_score(tech, plan=None, fund=None, tm=None, congress=None, sector=None):
+    """Indicator score v2 (engine.py). Congress trades are no longer scored (no evidence they predict);
+    they stay as information. Falls back to v1 only if the v2 features are missing."""
+    x = dict(tech.get("fx") or {})
+    if not x:
+        return ind_score_v1(tech, plan, fund, tm, congress)
+    if sector:
+        x.update(sector)
+    return EN.indicator_score(x, fund, tm)
+
+
+def sector_part(fund, t_last_bars):
+    """Sector ETF trend and relative strength vs the sector, when the sector is known."""
+    etf = MK.SECTOR_ETF.get((fund or {}).get("sector") or "")
+    if not etf:
+        return None
+    try:
+        rows = etf_rows(etf)
+        et, ec = [r[0] for r in rows], [float(r[4]) for r in rows]
+        tr = MK.etf_trend(ec)[-1]
+        t, c = t_last_bars
+        b = FX.align(t, et, ec)
+        out = {"sector_etf": etf, "sector_he": MK.SECTOR_HE.get(etf), "sector_trend": tr}
+        for n in (20, 60, 120):
+            out["rs_sector_%d" % n] = FX.last({"s": FX.rel_strength(c, b, n)}, "s")
+        return out
+    except Exception:
+        return None
 
 
 def trade_plan(tech, cfg):
@@ -844,6 +935,18 @@ def tech_part(sym, force=False):
     o, h, l, c, v = ([float(r[i] or 0) for r in rows] for i in range(1, 6))
     tech = technicals(t, o, h, l, c, v)
     tech["volume"] = volume_analysis(t, o, h, l, c, v)
+    reg = (meta.get("currentTradingPeriod") or {}).get("regular") or {}
+    partial = bool(reg.get("start") and reg["start"] <= time.time() < reg.get("end", 0) and t[-1] >= reg["start"])
+    tech["bar_partial"] = partial
+    try:
+        tech["fx"], tech["overlays"] = fx_block(t, o, h, l, c, v, partial)
+    except Exception as e:
+        tech["fx"], tech["overlays"] = None, None
+        print("fx failed for %s: %s" % (sym, e))
+    try:
+        tech["asset"] = MK.asset_type(sym, meta)
+    except Exception:
+        tech["asset"] = None
     try:
         ext = demo_ext(sym, c[-1], tech["volume"]["avg20"]) if DEMO else extended(sym, tech["volume"]["avg20"])
     except Exception:
@@ -896,7 +999,10 @@ def analyze(sym, force=False):
     out["decision"] = decision(base["tech"], base["tech"]["volume"], out["fund"], out["plan"], out["tm"], out["sec"])
     out["decision"]["ext_alerts"] = ext_alerts(base.get("ext"), out["plan"])
     out["score"] = score(base["tech"], out["fund"], out["sec"], base.get("ext"), out["plan"])
-    out["ind_score"] = ind_score(base["tech"], out["plan"], out["fund"], out["tm"])
+    cs = base["candles"]
+    out["sector"] = sector_part(out["fund"], ([x[0] for x in cs], [x[4] for x in cs]))
+    out["market"] = {k: (market_ctx() or {}).get(k) for k in ("regime", "vix")}
+    out["ind_score"] = ind_score(base["tech"], out["plan"], out["fund"], out["tm"], sector=out["sector"])
     if out["score"]:
         out["decision"]["code"] = out["score"]["code"]
     _full[sym] = (time.time(), out)
