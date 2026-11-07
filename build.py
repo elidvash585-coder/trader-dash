@@ -38,10 +38,12 @@ def main():
         try:
             a = D.analyze(sym)
             a["congress"] = cg.get(sym, []) if "_note" not in cg else None
+            a["ind_score"] = D.ind_score(a["tech"], a["plan"], a["fund"], a.get("tm"), a["congress"])
             with open(os.path.join(OUT, "data", safe(sym) + ".json"), "w", encoding="utf-8") as fh:
                 json.dump(a, fh, ensure_ascii=False, separators=(",", ":"))
             q = D.quick(sym)
             q["congress"] = len(a["congress"] or [])
+            q["ind"] = a["ind_score"]["value"] if a.get("ind_score") else None
             rows.append(q)
             ok += 1
             print("ok   %-8s %s" % (sym, a.get("decision", {}).get("verdict", "")), flush=True)
