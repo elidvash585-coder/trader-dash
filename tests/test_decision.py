@@ -18,7 +18,7 @@ TAB = {"base_R": 0.05, "test_from": "2025-04-03", "stocks": 87, "from": "2017-11
 
 class Hist(unittest.TestCase):
     def test_not_covered_assets_are_na(self):
-        for t in ("leveraged_etf", "inverse_etf", "crypto"):
+        for t in ("leveraged_etf", "inverse_etf", "crypto", "etf"):  # the research sample held stocks only
             self.assertIsNone(EN.hist_score(22, {"type": t}, tab=TAB)["value"])
 
     def test_significant_and_stable_can_exceed_cap(self):
