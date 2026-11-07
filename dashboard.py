@@ -488,6 +488,80 @@ except Exception:
     pass
 
 
+SCORE_TABLE = None
+try:
+    with open(os.path.join(HERE, "research", "score_table.json"), encoding="utf-8") as _fh:
+        SCORE_TABLE = json.load(_fh)
+except Exception:
+    SCORE_TABLE = None
+RSI_BINS = [(0, 20, "<20"), (20, 25, "20-25"), (25, 30, "25-30"), (30, 35, "30-35"), (35, 40, "35-40"),
+            (40, 50, "40-50"), (50, 60, "50-60"), (60, 70, "60-70"), (70, 101, ">70")]
+SHRINK_K = 500  # trades: a group with n trades keeps n / (n + 500) of its measured edge
+
+
+def score(tech, fund=None, sec=None, ext=None, plan=None):
+    """0-10 score of the model trade, from history: what the same trade earned when RSI was in the
+    same range (89 stocks, 5 years), shrunk toward 'no edge' for small groups. 5 = like a random day."""
+    rsi = tech.get("rsi")
+    if rsi is None or not SCORE_TABLE:
+        return None
+    t_all, t_test = SCORE_TABLE["all"], SCORE_TABLE["test"]
+    lab = next(l for lo, hi, l in RSI_BINS if lo <= rsi < hi)
+    def pick(rows, lab):
+        r = next((x for x in rows if x["rsi"] == lab and "edge" in x), None)
+        if lab == "<20":  # too few trades alone: pool with the neighbouring 20-25 group
+            r2_ = next((x for x in rows if x["rsi"] == "20-25" and "edge" in x), None)
+            if r and r2_:
+                n = r["n"] + r2_["n"]
+                w = lambda k: (r[k] * r["n"] + r2_[k] * r2_["n"]) / n
+                r = {"rsi": "<25", "n": n, "win": round(w("win"), 1), "profit": round(w("profit"), 1), "R": round(w("R"), 3),
+                     "edge": round(w("edge"), 3), "edge_ci": r2_["edge_ci"]}
+        return r
+    row, trow = pick(t_all["rows"], lab), pick(t_test["rows"], lab)
+    if not row:
+        return None
+    shr = lambda r: r["edge"] * r["n"] / (r["n"] + SHRINK_K)
+    span = max(abs(shr(r)) for r in t_all["rows"] if "edge" in r) or 1
+    raw = 5 + 4.5 * shr(row) / span
+    val = round(max(0.0, min(10.0, raw)), 1)
+    reasons = [("up" if row["edge"] > 0 else "down" if row["edge"] < 0 else "acc",
+                "RSI %.0f (טווח %s). בהיסטוריה, באותה עסקה כשה-RSI היה בטווח הזה: %.0f%% הסתיימו ברווח, %.0f%% הגיעו ליעד, "
+                "ממוצע %+.2fR לעסקה (כניסה ביום אקראי: %+.2fR). %s עסקאות." % (
+                    rsi, row["rsi"], row["profit"], row["win"], row["R"], t_all["base_R"], format(row["n"], ",")))]
+    lo, hi = row["edge_ci"]
+    reasons.append(("acc", "היתרון מול יום אקראי: %+.2fR, טווח סביר %+.2f עד %+.2f%s." % (
+        row["edge"], lo, hi, " (מובהק)" if lo > 0 or hi < 0 else " (כולל אפס, לא מובהק)")))
+    if trow:
+        same = (trow["edge"] > 0) == (row["edge"] > 0)
+        reasons.append(("up" if same else "warn", "בתקופה האחרונה (מ-%s) לבד: %+.2fR מול יום אקראי, %s." % (
+            SCORE_TABLE["test_from"], trow["edge"], "באותו כיוון" if same else "בכיוון ההפוך, כך שהממצא פחות יציב")))
+    caps = []
+    if fund and fund.get("next_earnings"):
+        try:
+            days = (datetime.date.fromisoformat(fund["next_earnings"]) - datetime.date.today()).days
+            if 0 <= days <= 10:
+                caps.append("דוח כספי בעוד %d ימים, בתוך 10 ימי העסקה" % days)
+        except Exception:
+            pass
+    if sec:
+        rec = [f for f in sec.get("filings", []) if f.get("important")
+               and (datetime.date.today() - datetime.date.fromisoformat(f["date"])).days <= 7]
+        if rec:
+            caps.append("דיווח מהותי טרי ל-SEC (%s)" % ", ".join(rec[0]["items_he"]))
+    if ext and ext.get("active") and plan and ext.get("price") is not None and ext["price"] <= plan["stop"]:
+        caps.append("המחיר ב-pre-market כבר מתחת לסטופ המתוכנן")
+    if caps and val > 5:
+        val = 5.0
+        reasons.append(("warn", "הציון הוגבל ל-5: " + "; ".join(caps) + ". (כלל זהירות שלי, לא נבדק לאחור.)"))
+    elif caps:
+        reasons.append(("warn", "שים לב: " + "; ".join(caps) + "."))
+    label = ("שווה לשקול כניסה" if val >= 7 else "חיובי קל" if val >= 5.6 else
+             "ניטרלי, כמו כניסה אקראית" if val >= 4.4 else "לא כדאי עכשיו")
+    code = "go" if val >= 7 else "wait" if val >= 5.6 else "no"
+    return {"value": val, "label": label, "code": code, "bucket": row["rsi"], "p_profit": row["profit"], "p_target": row["win"],
+            "exp_R": row["R"], "edge": row["edge"], "n": row["n"], "reasons": reasons, "capped": bool(caps and val == 5.0)}
+
+
 def trade_plan(tech, cfg):
     """The backtested plan: enter at the next open (estimated by the last price), stop 1 ATR, target 3R, 10 days."""
     price, a = tech["price"], tech["atr"]
@@ -757,6 +831,9 @@ def analyze(sym, force=False):
             out["errors"].append("נתוני SEC לא זמינים (%s)" % str(e)[:80])
     out["decision"] = decision(base["tech"], base["tech"]["volume"], out["fund"], out["plan"], out["tm"], out["sec"])
     out["decision"]["ext_alerts"] = ext_alerts(base.get("ext"), out["plan"])
+    out["score"] = score(base["tech"], out["fund"], out["sec"], base.get("ext"), out["plan"])
+    if out["score"]:
+        out["decision"]["code"] = out["score"]["code"]
     _full[sym] = (time.time(), out)
     return out
 
@@ -789,12 +866,17 @@ def quick(sym, force=False):
         tm = get_tm(sym, a, pl)
         full = (_full.get(sym) or (0, {}))[1]
         dec = decision(t, t["volume"], f if f else None, pl, tm, full.get("sec"))
+        sc = score(t, f if f else None, full.get("sec"), a.get("ext"), pl)
+        if sc:
+            dec["code"] = sc["code"]
         return {"symbol": sym, "price": t["price"], "change_1d": t["change_1d"], "change_1m": t["change_1m"],
                 "rsi": t["rsi"], "cci": t["cci"], "rvol": t["rvol"], "trend": t["trend"], "tech_score": t["tech_score"],
                 "verdict": label, "target_up": r2((an["mean"] / t["price"] - 1) * 100, 1) if an.get("mean") else None,
                 "spark": [x[4] for x in a["candles"][-60:]], "decision": dec["verdict"], "decision_code": dec["code"],
                 "decision_score": dec["score"], "channel": t["channel"]["kind"], "name": f.get("name"),
                 "tm": {"p_target": tm["p_target"], "lean": tm["lean"]} if tm else None,
+                "score": sc["value"] if sc else None, "score_label": sc["label"] if sc else None,
+                "p_profit": sc["p_profit"] if sc else None,
                 "ext": {k: (a.get("ext") or {}).get(k) for k in ("session", "active", "price", "change", "gap", "volume", "vol_pct")}
                 if (a.get("ext") or {}).get("active") else None}
     except Exception as e:

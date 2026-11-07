@@ -179,10 +179,10 @@ td.n{font-family:var(--mono);direction:ltr;text-align:left}
       <div class="row static-hide"><input id="addInp" placeholder="הוסף טיקר (MSFT)" onkeydown="if(event.key==='Enter')addSym()"><button onclick="addSym()">+</button></div>
       <div class="row" style="justify-content:space-between">
         <div class="flt" id="flt"></div>
-        <select id="sortSel" onchange="state.sort=this.value;renderWL()"><option value="list">סדר שלי</option><option value="dec">לפי המלצה</option><option value="chg">לפי שינוי</option><option value="ext">לפי pre-market</option><option value="sym">א-ב</option></select>
+        <select id="sortSel" onchange="state.sort=this.value;renderWL()"><option value="list">סדר שלי</option><option value="dec">לפי ציון</option><option value="chg">לפי שינוי</option><option value="ext">לפי pre-market</option><option value="sym">א-ב</option></select>
       </div>
     </div>
-    <div class="wlcols"><span>מניה</span><span style="text-align:left">מחיר</span><span style="text-align:center">המלצה</span></div>
+    <div class="wlcols"><span>מניה</span><span style="text-align:left">מחיר</span><span style="text-align:center">ציון /10</span></div>
     <div class="wlist" id="wlist"></div>
     <div class="wlsum" id="wlsum"></div>
   </aside>
@@ -209,7 +209,8 @@ const big=x=>{if(x==null)return'—';const a=Math.abs(x);return(x<0?'-':'')+(a>=
 const P=x=>x==null?'—':fmt(x*100,1)+'%';
 const REC={strong_buy:'קנייה חזקה',buy:'קנייה',hold:'החזק',underperform:'תת-ביצוע',sell:'מכירה'};
 const TAGHE={earnings:'דוחות',analyst:'אנליסטים',deal:'עסקה',legal:'משפטי',capital:'הון',people:'הנהלה'};
-const DEC={go:'אות פעיל',wait:'קרוב',no:'אין אות'};
+const DEC={go:'שקול',wait:'חיובי קל',no:'לא עכשיו'};
+const scCol=v=>v==null?'var(--dim)':v>=7?'var(--up)':v>=5.6?'#9be3c7':v>=4.4?'var(--warn)':'var(--down)';
 const STATIC=!!window.STATIC_SITE;let IDX=null;if(STATIC)document.documentElement.classList.add('static');
 async function loadIdx(force){if(!IDX||force){const r=await fetch('data/index.json?t='+Date.now());IDX=await r.json()}return IDX}
 async function api(p,o){
@@ -236,10 +237,10 @@ async function loadList(force){
   await Promise.all([1,2,3,4,5].map(w))}
 function renderWL(){
   const cnt={all:state.rows.length,go:0,wait:0,no:0};state.rows.forEach(r=>{if(r.decision_code)cnt[r.decision_code]++});
-  $('#flt').innerHTML=[['all','הכל'],['go','אות'],['wait','קרוב'],['no','אין']].map(([k,l])=>`<button class="${state.filter===k?'on':''}" onclick="state.filter='${k}';renderWL()">${l} ${cnt[k]}</button>`).join('');
+  $('#flt').innerHTML=[['all','הכל'],['go','7+'],['wait','5.6-7'],['no','מתחת']].map(([k,l])=>`<button class="${state.filter===k?'on':''}" onclick="state.filter='${k}';renderWL()">${l} ${cnt[k]}</button>`).join('');
   let rows=state.rows.filter(r=>state.filter==='all'||r.decision_code===state.filter);
   const rank={go:0,wait:1,no:2};
-  if(state.sort==='dec')rows=[...rows].sort((a,b)=>(rank[a.decision_code]??3)-(rank[b.decision_code]??3)||(b.decision_score||0)-(a.decision_score||0));
+  if(state.sort==='dec')rows=[...rows].sort((a,b)=>(b.score??-1)-(a.score??-1));
   if(state.sort==='chg')rows=[...rows].sort((a,b)=>(b.change_1d??-99)-(a.change_1d??-99));
   if(state.sort==='ext')rows=[...rows].sort((a,b)=>Math.abs(b.ext?.change??0)-Math.abs(a.ext?.change??0));
   if(state.sort==='sym')rows=[...rows].sort((a,b)=>a.symbol.localeCompare(b.symbol));
@@ -249,8 +250,8 @@ function renderWL(){
     if(r.error)return `<div class="wr ${sel}" onclick="select('${r.symbol}')"><div class="s"><b>${r.symbol}</b><small class="warn">אין נתונים</small></div><div class="p dim">—</div><div class="rec ld">—</div>${x}</div>`;
     return `<div class="wr ${sel}" onclick="select('${r.symbol}')"><div class="s"><b>${r.symbol}</b>${r.congress?`<span class="badge" title="עסקאות חברי קונגרס ב-90 יום">🏛 ${r.congress}</span>`:''}<small>${r.name||('תעלה '+r.channel)}</small></div>
       <div class="p">${fmt(r.price)}<small class="${cls(r.change_1d)}">${pct(r.change_1d)}</small>${r.ext?`<span class="extc ${r.ext.gap?'gap':''}" title="${r.ext.session==='pre'?'Pre-market':'After-hours'} ${fmt(r.ext.price)}">${r.ext.gap?'⚡':''}${r.ext.session==='pre'?'PM':'AH'} ${pct(r.ext.change,1)}</span>`:''}</div>
-      <div class="rec ${r.decision_code}" title="${r.decision} · ${r.decision_score}% מהכללים">${DEC[r.decision_code]}</div>${x}</div>`}).join('');
-  $('#wlsum').innerHTML=`<span><b class="up">${cnt.go}</b> אות פעיל · <b class="warn">${cnt.wait}</b> קרוב · <b class="dim">${cnt.no}</b> אין</span><span>${state.rows.some(r=>r.loading)?'טוען...':''}</span>`}
+      <div class="rec" style="color:${scCol(r.score)};border-color:${scCol(r.score)};font-family:var(--mono);font-size:13px" title="${r.score_label||''}${r.p_profit!=null?' · '+fmt(r.p_profit,0)+'% ברווח בהיסטוריה':''}">${r.score!=null?fmt(r.score,1):'—'}</div>${x}</div>`}).join('');
+  $('#wlsum').innerHTML=`<span><b class="up">${cnt.go}</b> ציון 7+ · <b style="color:#9be3c7">${cnt.wait}</b> חיובי קל · <b class="dim">${cnt.no}</b> מתחת</span><span>${state.rows.some(r=>r.loading)?'טוען...':''}</span>`}
 async function addSym(){const v=$('#addInp').value.trim().toUpperCase();if(!v)return;const wl=await api('/api/watchlist');if(!wl.symbols.includes(v))wl.symbols.push(v);await post('/api/watchlist',wl);$('#addInp').value='';state.sel=v;loadList()}
 async function rmSym(s){const wl=await api('/api/watchlist');wl.symbols=wl.symbols.filter(x=>x!==s);await post('/api/watchlist',wl);if(state.sel===s)state.sel=null;loadList()}
 
@@ -293,12 +294,22 @@ function tmSec(d){const m=d.tm;if(!m)return'';const h=m.history||{};
 function renderInfo(){const d=state.data,t=d.tech,ch=t.channel,dc=d.decision,p=d.plan,f=d.fund||{},a=f.analyst||{};
   const up=a.mean?(a.mean/t.price-1)*100:null;const dist=x=>pct((x/t.price-1)*100,1);const col=dc.code==='go'?'#26c99a':dc.code==='wait'?'#f5b041':'#5d6780';
   let h=(d.errors||[]).map(e=>`<div class="err">${e}</div>`).join('');
-  const ev=dc.evidence||{},rv=dc.rsi==null?0:Math.max(0,Math.min(100,dc.rsi));
+  const sc=d.score;
+  if(sc){const c=scCol(sc.value),ang=(sc.value/10*163.4).toFixed(1);
+  h+=`<div class="sec"><div class="dec" style="border-color:${c};background:linear-gradient(135deg,color-mix(in srgb,${c} 16%,transparent),transparent)"><div class="v"><div><div class="mute" style="font-size:12px">כדאי להיכנס? ציון מההיסטוריה</div><b style="color:${c}">${sc.label}</b></div>
+     <svg width="74" height="74" viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#232b3a" stroke-width="7"/><circle cx="32" cy="32" r="26" fill="none" stroke="${c}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${ang} 200" transform="rotate(-90 32 32)"/><text x="32" y="34" text-anchor="middle" fill="#e3e8f1" font-family="JetBrains Mono" font-size="17" font-weight="700">${fmt(sc.value,1)}</text><text x="32" y="46" text-anchor="middle" fill="#8a94a8" font-family="JetBrains Mono" font-size="8">/10</text></svg></div>
+     <div class="kvs" style="margin-top:10px"><div><label>הסתיימו ברווח</label><b>${fmt(sc.p_profit,0)}%</b></div><div><label>הגיעו ליעד (3R)</label><b>${fmt(sc.p_target,0)}%</b></div></div>
+     <ul class="insight" style="margin:10px 0 0">${sc.reasons.map(([k,t])=>`<li style="--c:var(--${k})">${t}</li>`).join('')}</ul>
+     ${p&&sc.value>=5.6?`<p style="font-size:12.5px;margin-top:8px">העסקה שנבדקה: כניסה בפתיחה (בערך ${fmt(p.entry)}), סטופ ${fmt(p.stop)}, יעד ${fmt(p.target)}, יציאה אחרי ${p.horizon} ימים.</p>`:''}
+     ${(dc.ext_alerts||[]).some(a=>a.level!=='info')?'<p class="warn" style="font-size:12px;margin-top:6px">⚠ יש התראת '+(d.ext.session==='pre'?'pre-market':'after-hours')+', ראה למטה.</p>':''}
+     <p class="dim" style="font-size:11px;margin-top:8px">5 = כמו כניסה ביום אקראי. הציון מבוסס על אותה עסקה ב-89 מניות ב-4 השנים האחרונות, לפי ה-RSI בלבד, כי שאר האינדיקטורים לא שיפרו תחזית בבדיקה. זה לא ייעוץ.</p></div></div>`;}
+  else{  const ev=dc.evidence||{},rv=dc.rsi==null?0:Math.max(0,Math.min(100,dc.rsi));
   h+=`<div class="sec"><div class="dec ${dc.code}"><div class="v"><div><div class="mute" style="font-size:12px">מודל מכירת יתר (נבדק לאחור)</div><b>${dc.verdict}</b></div>
      <svg width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#232b3a" stroke-width="7"/><circle cx="32" cy="32" r="26" fill="none" stroke="${col}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${(rv/100*163.4).toFixed(1)} 200" transform="rotate(-90 32 32)"/><text x="32" y="31" text-anchor="middle" fill="#e3e8f1" font-family="JetBrains Mono" font-size="15" font-weight="600">${fmt(dc.rsi,0)}</text><text x="32" y="45" text-anchor="middle" fill="#8a94a8" font-family="JetBrains Mono" font-size="9">RSI</text></svg></div>
      <p>${dc.action}</p>${(dc.ext_alerts||[]).some(a=>a.level!=='info')?'<p class="warn" style="font-size:12px;margin-top:6px">⚠ יש התראת '+(d.ext.session==='pre'?'pre-market':'after-hours')+', ראה למטה.</p>':''}
-     <p class="dim" style="font-size:11.5px;margin-top:8px">בבדיקה לאחור (${ev.test_n?ev.test_n.toLocaleString():'—'} עסקאות מ-${ev.test_from||''}): ${fmt(ev.test_win,0)}% הצלחה, ממוצע ${ev.test_R>0?'+':''}${fmt(ev.test_R)}R לעסקה, ${ev.test_edge>0?'+':''}${fmt(ev.test_edge)}R מעל קנייה ביום אקראי. התוצאה חיובית אבל לא מובהקת סטטיסטית.</p></div></div>
-  ${extSec(d)}
+     <p class="dim" style="font-size:11.5px;margin-top:8px">בבדיקה לאחור (${ev.test_n?ev.test_n.toLocaleString():'—'} עסקאות מ-${ev.test_from||''}): ${fmt(ev.test_win,0)}% הצלחה, ממוצע ${ev.test_R>0?'+':''}${fmt(ev.test_R)}R לעסקה, ${ev.test_edge>0?'+':''}${fmt(ev.test_edge)}R מעל קנייה ביום אקראי. התוצאה חיובית אבל לא מובהקת סטטיסטית.</p></div></div>`;
+  }
+  h+=`${extSec(d)}
   <div class="sec"><h4>תיאור מצב <span class="dim" style="font-weight:400">בבדיקה לאחור הכללים האלה לא שיפרו תחזית</span></h4><ul class="chk">${dc.items.map(i=>`<li class="${i.ok===true?'ok':i.ok===false?'bad':'neu'}"><i>${i.ok===true?'✓':i.ok===false?'✕':'–'}</i><span>${i.label}<small>${i.detail}</small></span></li>`).join('')}</ul></div>
   ${tmSec(d)}
   <div class="sec"><h4>מגמה ותעלה</h4><div class="chan">${chanSvg(ch)}<div><b style="font-size:16px" class="${ch.kind==='עולה'?'up':ch.kind==='יורדת'?'down':'warn'}">תעלה ${ch.kind}</b>
