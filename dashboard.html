@@ -41,9 +41,9 @@ input:focus{border-color:var(--acc)}
 .flt{display:flex;gap:4px;flex-wrap:wrap}
 .flt button{padding:3px 8px;font-size:11.5px;border-radius:999px}
 .flt button.on{background:rgba(61,123,253,.18);border-color:var(--acc)}
-.wlcols{display:grid;grid-template-columns:1fr 78px 64px;gap:6px;padding:6px 12px;font-size:11px;color:var(--dim);border-bottom:1px solid var(--line)}
+.wlcols{display:grid;grid-template-columns:1fr 74px 46px 46px;gap:6px;padding:6px 12px;font-size:11px;color:var(--dim);border-bottom:1px solid var(--line)}
 .wlist{overflow:auto;flex:1;min-height:0}
-.wr{display:grid;grid-template-columns:1fr 78px 64px;gap:6px;align-items:center;padding:8px 12px;border-bottom:1px solid rgba(35,43,58,.6);cursor:pointer;position:relative}
+.wr{display:grid;grid-template-columns:1fr 74px 46px 46px;gap:6px;align-items:center;padding:8px 12px;border-bottom:1px solid rgba(35,43,58,.6);cursor:pointer;position:relative}
 .wr:hover{background:var(--hover)}
 .wr.sel{background:rgba(61,123,253,.13);box-shadow:inset -3px 0 0 var(--acc)}
 .wr .s{min-width:0}
@@ -179,10 +179,10 @@ td.n{font-family:var(--mono);direction:ltr;text-align:left}
       <div class="row static-hide"><input id="addInp" placeholder="הוסף טיקר (MSFT)" onkeydown="if(event.key==='Enter')addSym()"><button onclick="addSym()">+</button></div>
       <div class="row" style="justify-content:space-between">
         <div class="flt" id="flt"></div>
-        <select id="sortSel" onchange="state.sort=this.value;renderWL()"><option value="list">סדר שלי</option><option value="dec">לפי ציון</option><option value="chg">לפי שינוי</option><option value="ext">לפי pre-market</option><option value="sym">א-ב</option></select>
+        <select id="sortSel" onchange="state.sort=this.value;renderWL()"><option value="list">סדר שלי</option><option value="dec">לפי ציון היסטורי</option><option value="ind">לפי ציון אינדיקטורים</option><option value="both">לפי ממוצע שניהם</option><option value="chg">לפי שינוי</option><option value="ext">לפי pre-market</option><option value="sym">א-ב</option></select>
       </div>
     </div>
-    <div class="wlcols"><span>מניה</span><span style="text-align:left">מחיר</span><span style="text-align:center">ציון /10</span></div>
+    <div class="wlcols"><span>מניה</span><span style="text-align:left">מחיר</span><span style="text-align:center" title="ציון מההיסטוריה (נבדק לאחור)">היסטורי</span><span style="text-align:center" title="ציון אינדיקטורים (משקל שווה, לא נבדק)">אינד׳</span></div>
     <div class="wlist" id="wlist"></div>
     <div class="wlsum" id="wlsum"></div>
   </aside>
@@ -210,6 +210,13 @@ const P=x=>x==null?'—':fmt(x*100,1)+'%';
 const REC={strong_buy:'קנייה חזקה',buy:'קנייה',hold:'החזק',underperform:'תת-ביצוע',sell:'מכירה'};
 const TAGHE={earnings:'דוחות',analyst:'אנליסטים',deal:'עסקה',legal:'משפטי',capital:'הון',people:'הנהלה'};
 const DEC={go:'שקול',wait:'חיובי קל',no:'לא עכשיו'};
+const inCol=v=>v==null?'var(--dim)':v>=6.5?'var(--up)':v>=5.5?'#9be3c7':v>=4.5?'var(--warn)':v>=3.5?'#f08a6b':'var(--down)';
+const ring=(v,c)=>`<svg width="74" height="74" viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#232b3a" stroke-width="7"/><circle cx="32" cy="32" r="26" fill="none" stroke="${c}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${(v/10*163.4).toFixed(1)} 200" transform="rotate(-90 32 32)"/><text x="32" y="34" text-anchor="middle" fill="#e3e8f1" font-family="JetBrains Mono" font-size="17" font-weight="700">${fmt(v,1)}</text><text x="32" y="46" text-anchor="middle" fill="#8a94a8" font-family="JetBrains Mono" font-size="8">/10</text></svg>`;
+function indSec(d){const s=d.ind_score;if(!s)return '';const c=inCol(s.value);
+  return `<div class="sec"><div class="dec" style="border-color:${c};border-style:dashed;background:linear-gradient(135deg,color-mix(in srgb,${c} 12%,transparent),transparent)"><div class="v"><div><div class="mute" style="font-size:12px">ציון 2: אינדיקטורים (לא נבדק)</div><b style="color:${c}">${s.label}</b></div>${ring(s.value,c)}</div>
+   <div style="margin-top:10px;display:flex;flex-direction:column;gap:7px">${s.components.map(k=>`<div title="${k.why}"><div style="display:flex;justify-content:space-between;font-size:12px"><span>${k.name}</span><b class="num" style="color:${inCol(k.value)}">${fmt(k.value,1)}</b></div>
+     <div style="height:5px;background:#232b3a;border-radius:3px;margin-top:3px"><div style="height:5px;border-radius:3px;width:${k.value*10}%;background:${inCol(k.value)}"></div></div><small class="dim" style="font-size:10.5px">${k.why}</small></div>`).join('')}</div>
+   <p class="dim" style="font-size:11px;margin-top:8px">ממוצע פשוט של ${s.n} רכיבים, כל אחד 0-10, משקל שווה. 5 = ניטרלי. בבדיקה לאחור האינדיקטורים האלה לא שיפרו את התחזית, אז זה ציון לשיקולך, לא תחזית.</p></div></div>`}
 const scCol=v=>v==null?'var(--dim)':v>=7?'var(--up)':v>=5.6?'#9be3c7':v>=4.4?'var(--warn)':'var(--down)';
 const STATIC=!!window.STATIC_SITE;let IDX=null;if(STATIC)document.documentElement.classList.add('static');
 async function loadIdx(force){if(!IDX||force){const r=await fetch('data/index.json?t='+Date.now());IDX=await r.json()}return IDX}
@@ -241,16 +248,19 @@ function renderWL(){
   let rows=state.rows.filter(r=>state.filter==='all'||r.decision_code===state.filter);
   const rank={go:0,wait:1,no:2};
   if(state.sort==='dec')rows=[...rows].sort((a,b)=>(b.score??-1)-(a.score??-1));
+  if(state.sort==='ind')rows=[...rows].sort((a,b)=>(b.ind??-1)-(a.ind??-1));
+  if(state.sort==='both')rows=[...rows].sort((a,b)=>((b.score??0)+(b.ind??0))-((a.score??0)+(a.ind??0)));
   if(state.sort==='chg')rows=[...rows].sort((a,b)=>(b.change_1d??-99)-(a.change_1d??-99));
   if(state.sort==='ext')rows=[...rows].sort((a,b)=>Math.abs(b.ext?.change??0)-Math.abs(a.ext?.change??0));
   if(state.sort==='sym')rows=[...rows].sort((a,b)=>a.symbol.localeCompare(b.symbol));
   $('#wlist').innerHTML=rows.map(r=>{const sel=r.symbol===state.sel?'sel':'';
     const x=`<span class="x" title="הסר" onclick="event.stopPropagation();rmSym('${r.symbol}')">✕</span>`;
-    if(r.loading)return `<div class="wr ${sel}" onclick="select('${r.symbol}')"><div class="s"><b>${r.symbol}</b><small>טוען...</small></div><div class="p dim">···</div><div class="rec ld">···</div>${x}</div>`;
-    if(r.error)return `<div class="wr ${sel}" onclick="select('${r.symbol}')"><div class="s"><b>${r.symbol}</b><small class="warn">אין נתונים</small></div><div class="p dim">—</div><div class="rec ld">—</div>${x}</div>`;
+    if(r.loading)return `<div class="wr ${sel}" onclick="select('${r.symbol}')"><div class="s"><b>${r.symbol}</b><small>טוען...</small></div><div class="p dim">···</div><div class="rec ld">···</div><div class="rec ld">···</div>${x}</div>`;
+    if(r.error)return `<div class="wr ${sel}" onclick="select('${r.symbol}')"><div class="s"><b>${r.symbol}</b><small class="warn">אין נתונים</small></div><div class="p dim">—</div><div class="rec ld">—</div><div class="rec ld">—</div>${x}</div>`;
     return `<div class="wr ${sel}" onclick="select('${r.symbol}')"><div class="s"><b>${r.symbol}</b>${r.congress?`<span class="badge" title="עסקאות חברי קונגרס ב-90 יום">🏛 ${r.congress}</span>`:''}<small>${r.name||('תעלה '+r.channel)}</small></div>
       <div class="p">${fmt(r.price)}<small class="${cls(r.change_1d)}">${pct(r.change_1d)}</small>${r.ext?`<span class="extc ${r.ext.gap?'gap':''}" title="${r.ext.session==='pre'?'Pre-market':'After-hours'} ${fmt(r.ext.price)}">${r.ext.gap?'⚡':''}${r.ext.session==='pre'?'PM':'AH'} ${pct(r.ext.change,1)}</span>`:''}</div>
-      <div class="rec" style="color:${scCol(r.score)};border-color:${scCol(r.score)};font-family:var(--mono);font-size:13px" title="${r.score_label||''}${r.p_profit!=null?' · '+fmt(r.p_profit,0)+'% ברווח בהיסטוריה':''}">${r.score!=null?fmt(r.score,1):'—'}</div>${x}</div>`}).join('');
+      <div class="rec" style="color:${scCol(r.score)};border-color:${scCol(r.score)};font-family:var(--mono);font-size:13px" title="${r.score_label||''}${r.p_profit!=null?' · '+fmt(r.p_profit,0)+'% ברווח בהיסטוריה':''}">${r.score!=null?fmt(r.score,1):'—'}</div>
+      <div class="rec" style="color:${inCol(r.ind)};border-color:${inCol(r.ind)};border-style:dashed;font-family:var(--mono);font-size:13px" title="ציון אינדיקטורים (לא נבדק)">${r.ind!=null?fmt(r.ind,1):'—'}</div>${x}</div>`}).join('');
   $('#wlsum').innerHTML=`<span><b class="up">${cnt.go}</b> ציון 7+ · <b style="color:#9be3c7">${cnt.wait}</b> חיובי קל · <b class="dim">${cnt.no}</b> מתחת</span><span>${state.rows.some(r=>r.loading)?'טוען...':''}</span>`}
 async function addSym(){const v=$('#addInp').value.trim().toUpperCase();if(!v)return;const wl=await api('/api/watchlist');if(!wl.symbols.includes(v))wl.symbols.push(v);await post('/api/watchlist',wl);$('#addInp').value='';state.sel=v;loadList()}
 async function rmSym(s){const wl=await api('/api/watchlist');wl.symbols=wl.symbols.filter(x=>x!==s);await post('/api/watchlist',wl);if(state.sel===s)state.sel=null;loadList()}
@@ -296,13 +306,13 @@ function renderInfo(){const d=state.data,t=d.tech,ch=t.channel,dc=d.decision,p=d
   let h=(d.errors||[]).map(e=>`<div class="err">${e}</div>`).join('');
   const sc=d.score;
   if(sc){const c=scCol(sc.value),ang=(sc.value/10*163.4).toFixed(1);
-  h+=`<div class="sec"><div class="dec" style="border-color:${c};background:linear-gradient(135deg,color-mix(in srgb,${c} 16%,transparent),transparent)"><div class="v"><div><div class="mute" style="font-size:12px">כדאי להיכנס? ציון מההיסטוריה</div><b style="color:${c}">${sc.label}</b></div>
+  h+=`<div class="sec"><div class="dec" style="border-color:${c};background:linear-gradient(135deg,color-mix(in srgb,${c} 16%,transparent),transparent)"><div class="v"><div><div class="mute" style="font-size:12px">ציון 1: מההיסטוריה (נבדק לאחור)</div><b style="color:${c}">${sc.label}</b></div>
      <svg width="74" height="74" viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#232b3a" stroke-width="7"/><circle cx="32" cy="32" r="26" fill="none" stroke="${c}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${ang} 200" transform="rotate(-90 32 32)"/><text x="32" y="34" text-anchor="middle" fill="#e3e8f1" font-family="JetBrains Mono" font-size="17" font-weight="700">${fmt(sc.value,1)}</text><text x="32" y="46" text-anchor="middle" fill="#8a94a8" font-family="JetBrains Mono" font-size="8">/10</text></svg></div>
      <div class="kvs" style="margin-top:10px"><div><label>הסתיימו ברווח</label><b>${fmt(sc.p_profit,0)}%</b></div><div><label>הגיעו ליעד (3R)</label><b>${fmt(sc.p_target,0)}%</b></div></div>
      <ul class="insight" style="margin:10px 0 0">${sc.reasons.map(([k,t])=>`<li style="--c:var(--${k})">${t}</li>`).join('')}</ul>
      ${p&&sc.value>=5.6?`<p style="font-size:12.5px;margin-top:8px">העסקה שנבדקה: כניסה בפתיחה (בערך ${fmt(p.entry)}), סטופ ${fmt(p.stop)}, יעד ${fmt(p.target)}, יציאה אחרי ${p.horizon} ימים.</p>`:''}
      ${(dc.ext_alerts||[]).some(a=>a.level!=='info')?'<p class="warn" style="font-size:12px;margin-top:6px">⚠ יש התראת '+(d.ext.session==='pre'?'pre-market':'after-hours')+', ראה למטה.</p>':''}
-     <p class="dim" style="font-size:11px;margin-top:8px">5 = כמו כניסה ביום אקראי. הציון מבוסס על אותה עסקה ב-89 מניות ב-4 השנים האחרונות, לפי ה-RSI בלבד, כי שאר האינדיקטורים לא שיפרו תחזית בבדיקה. זה לא ייעוץ.</p></div></div>`;}
+     <p class="dim" style="font-size:11px;margin-top:8px">5 = כמו כניסה ביום אקראי. הציון מבוסס על אותה עסקה ב-89 מניות ב-4 השנים האחרונות, לפי ה-RSI בלבד, כי שאר האינדיקטורים לא שיפרו תחזית בבדיקה. זה לא ייעוץ.</p></div></div>`+indSec(d);}
   else{  const ev=dc.evidence||{},rv=dc.rsi==null?0:Math.max(0,Math.min(100,dc.rsi));
   h+=`<div class="sec"><div class="dec ${dc.code}"><div class="v"><div><div class="mute" style="font-size:12px">מודל מכירת יתר (נבדק לאחור)</div><b>${dc.verdict}</b></div>
      <svg width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#232b3a" stroke-width="7"/><circle cx="32" cy="32" r="26" fill="none" stroke="${col}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${(rv/100*163.4).toFixed(1)} 200" transform="rotate(-90 32 32)"/><text x="32" y="31" text-anchor="middle" fill="#e3e8f1" font-family="JetBrains Mono" font-size="15" font-weight="600">${fmt(dc.rsi,0)}</text><text x="32" y="45" text-anchor="middle" fill="#8a94a8" font-family="JetBrains Mono" font-size="9">RSI</text></svg></div>

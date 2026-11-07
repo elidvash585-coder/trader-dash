@@ -562,6 +562,70 @@ def score(tech, fund=None, sec=None, ext=None, plan=None):
             "exp_R": row["R"], "edge": row["edge"], "n": row["n"], "reasons": reasons, "capped": bool(caps and val == 5.0)}
 
 
+def _cl(x):
+    return max(0.0, min(10.0, x))
+
+
+def ind_score(tech, plan=None, fund=None, tm=None, congress=None):
+    """Second score: every other indicator, equal weights, 0-10 each, averaged. NOT validated:
+    in the backtest these did not improve the forecast. Shown so the user can weigh them himself."""
+    comp = []
+
+    def add(key, name, val, why):
+        if val is not None:
+            comp.append({"key": key, "name": name, "value": round(_cl(val), 1), "why": why})
+    p, s50, s200 = tech["price"], tech["sma50"], tech["sma200"]
+    if s50 and s200:
+        k = sum([p > s50, s50 > s200, p > s200])
+        add("trend", "מגמה (ממוצעים)", k / 3 * 10, "%d מתוך 3: מחיר מעל 50, 50 מעל 200, מחיר מעל 200" % k)
+    ch = tech.get("channel")
+    if ch:
+        base = {"עולה": 7.0, "צידית": 5.0, "יורדת": 2.5}[ch["kind"]]
+        add("channel", "תעלת מגמה", base + (0.5 - ch["pos"]) * 3, "תעלה %s, %s" % (ch["kind"], ch["where"]))
+    if tech.get("cci") is not None and tech.get("macd") is not None:
+        v = (_cl(5 + tech["cci"] / 40) + (7 if tech["macd"] > tech["macd_signal"] else 3)) / 2
+        add("momentum", "מומנטום (CCI + MACD)", v, "CCI %.0f, MACD %s קו האות" % (tech["cci"], "מעל" if tech["macd"] > tech["macd_signal"] else "מתחת"))
+    vol = tech.get("volume") or {}
+    if vol.get("up_down_ratio") is not None:
+        v = (_cl(5 + (vol["up_down_ratio"] - 1) * 10) + (7 if vol.get("obv_up") else 3)) / 2
+        add("volume", "נפחים", v, "נפח עלייה/ירידה %.2f, OBV %s" % (vol["up_down_ratio"], "עולה" if vol.get("obv_up") else "יורד"))
+    if plan:
+        res = [r["price"] for r in tech["resistance"] if r["price"] > plan["entry"]]
+        room = (res[0] - plan["entry"]) / plan["risk_per_share"] if res and plan["risk_per_share"] else None
+        sup = [x["price"] for x in tech["support"]]
+        near_sup = bool(sup and (p - sup[0]) / p < 0.03)
+        v = (8 if room is None or room >= 2 else 6 if room >= 1 else 3) + (1 if near_sup else 0)
+        add("structure", "מבנה (תמיכה/התנגדות)", v, ("אין התנגדות קרובה" if room is None else "התנגדות במרחק %.1fR" % room) +
+            (", קרוב לתמיכה" if near_sup else ""))
+    a = (fund or {}).get("analyst") or {}
+    if a.get("mean") and p:
+        up = (a["mean"] / p - 1) * 100
+        rec = a.get("score")
+        v = _cl(5 + up / 5) if rec is None else (_cl(5 + up / 5) + _cl((3 - rec) * 5)) / 2
+        add("analysts", "אנליסטים", v, "יעד %+.0f%%%s" % (up, ", ציון המלצה %.1f (1 = קנייה חזקה)" % rec if rec else ""))
+    if fund and fund.get("rev_growth") is not None:
+        g, nm, fcf = fund["rev_growth"], fund.get("net_margin"), fund.get("fcf")
+        parts = [8 if g > 0.15 else 6 if g > 0 else 3]
+        if nm is not None:
+            parts.append(8 if nm > 0.15 else 6 if nm > 0 else 3)
+        if fcf is not None:
+            parts.append(7 if fcf > 0 else 3)
+        add("fundamentals", "פונדמנטלי", sum(parts) / len(parts), "צמיחת הכנסות %+.0f%%%s" % (
+            g * 100, ", שולי נקי %.0f%%" % (nm * 100) if nm is not None else ""))
+    if tm and tm.get("share") is not None:
+        add("timemachine", "Time Machine", 5 + (tm["share"] - tm["breakeven"]) / 3,
+            "יעד לפני סטופ ב-%.0f%% מההכרעות (איזון %.0f%%)" % (tm["share"], tm["breakeven"]))
+    if congress:
+        buys = sum(1 for t in congress if "purchase" in (t.get("type") or ""))
+        sells = sum(1 for t in congress if "sale" in (t.get("type") or ""))
+        add("congress", "חברי קונגרס", 5 + (buys - sells), "%d קניות ו-%d מכירות ב-90 יום" % (buys, sells))
+    if not comp:
+        return None
+    val = round(sum(c["value"] for c in comp) / len(comp), 1)
+    return {"value": val, "components": comp, "n": len(comp),
+            "label": "חיובי" if val >= 6.5 else "חיובי קל" if val >= 5.5 else "ניטרלי" if val >= 4.5 else "שלילי קל" if val >= 3.5 else "שלילי"}
+
+
 def trade_plan(tech, cfg):
     """The backtested plan: enter at the next open (estimated by the last price), stop 1 ATR, target 3R, 10 days."""
     price, a = tech["price"], tech["atr"]
@@ -832,6 +896,7 @@ def analyze(sym, force=False):
     out["decision"] = decision(base["tech"], base["tech"]["volume"], out["fund"], out["plan"], out["tm"], out["sec"])
     out["decision"]["ext_alerts"] = ext_alerts(base.get("ext"), out["plan"])
     out["score"] = score(base["tech"], out["fund"], out["sec"], base.get("ext"), out["plan"])
+    out["ind_score"] = ind_score(base["tech"], out["plan"], out["fund"], out["tm"])
     if out["score"]:
         out["decision"]["code"] = out["score"]["code"]
     _full[sym] = (time.time(), out)
@@ -867,6 +932,7 @@ def quick(sym, force=False):
         full = (_full.get(sym) or (0, {}))[1]
         dec = decision(t, t["volume"], f if f else None, pl, tm, full.get("sec"))
         sc = score(t, f if f else None, full.get("sec"), a.get("ext"), pl)
+        isc = (full.get("ind_score") if full else None) or ind_score(t, pl, f if f else None, tm)
         if sc:
             dec["code"] = sc["code"]
         return {"symbol": sym, "price": t["price"], "change_1d": t["change_1d"], "change_1m": t["change_1m"],
@@ -876,7 +942,7 @@ def quick(sym, force=False):
                 "decision_score": dec["score"], "channel": t["channel"]["kind"], "name": f.get("name"),
                 "tm": {"p_target": tm["p_target"], "lean": tm["lean"]} if tm else None,
                 "score": sc["value"] if sc else None, "score_label": sc["label"] if sc else None,
-                "p_profit": sc["p_profit"] if sc else None,
+                "p_profit": sc["p_profit"] if sc else None, "ind": isc["value"] if isc else None,
                 "ext": {k: (a.get("ext") or {}).get(k) for k in ("session", "active", "price", "change", "gap", "volume", "vol_pct")}
                 if (a.get("ext") or {}).get("active") else None}
     except Exception as e:
