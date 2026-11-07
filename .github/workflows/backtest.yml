@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -q numpy pandas scikit-learn
-      - run: python backtest.py && python backtest2.py
+      - run: python backtest.py && python backtest2.py && python backtest3.py
       - name: Save the results in the repository
         run: |
           git config user.name "github-actions[bot]"
