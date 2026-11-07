@@ -1,6 +1,6 @@
 {
  "version": "v2",
- "generated": "2026-11-07 21:16 UTC",
+ "generated": "2026-11-07 21:55 UTC",
  "stocks": 87,
  "from": "2017-11-07",
  "to": "2026-10-23",
@@ -191,5 +191,17 @@
    "worst_R": -10.95
   }
  },
- "excluded": "crypto, leveraged and inverse ETFs (not in the research universe)"
+ "excluded": "crypto, leveraged and inverse ETFs (not in the research universe)",
+ "mc": {
+  "trades": 50,
+  "paths": 2000,
+  "median_R": 2.98,
+  "p05_R": -48.32,
+  "p95_R": 58.32,
+  "p_below0": 45.8,
+  "dd_median_R": 15.36,
+  "dd_p95_R": 48.32,
+  "p_dd10": 72.9,
+  "months": 117
+ }
 }

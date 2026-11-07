@@ -116,6 +116,12 @@ Model trade: next open, stop 1 ATR, target 3R, 10 sessions, cost 0.10 % + slippa
 | TF-d כניסה אחרי Retest, ATR2, 3R, 20d | all | 7578 | 1913 | 41.8 | 9.2 | 51.8 | +0.050 [-0.068, +0.176] | -1.016 | 1.08 | -0.085 [-0.184, +0.003] | 0.28 | 0.34 | 415.7 | 13.2 |
 | TF-d כניסה אחרי Retest, ATR2, 3R, 20d | val | 6547 | 1637 | 42.3 | 8.9 | 51.5 | +0.051 [-0.084, +0.193] | -1.017 | 1.09 | -0.081 [-0.181, +0.033] | 0.28 | 0.34 | 414.9 | 13.3 |
 | TF-d כניסה אחרי Retest, ATR2, 3R, 20d | test | 1031 | 276 | 38.4 | 11.5 | 53.4 | +0.046 [-0.193, +0.326] | -1.014 | 1.08 | -0.107 [-0.301, +0.129] | 0.3 | 0.44 | 92.5 | 12.7 |
+| QG-a ATR2, 3R, 40d | all | 1150 | 652 | 37.8 | 19.7 | 59.7 | +0.199 [+0.042, +0.354] | -1.020 | 1.31 | -0.005 [-0.133, +0.126] | 0.69 | 0.94 | 117.3 | 19.7 |
+| QG-a ATR2, 3R, 40d | val | 946 | 536 | 37.4 | 19.6 | 60.5 | +0.179 [-0.010, +0.373] | -1.021 | 1.27 | -0.023 [-0.163, +0.115] | 0.61 | 0.84 | 117.3 | 19.6 |
+| QG-a ATR2, 3R, 40d | test | 204 | 117 | 39.7 | 20.6 | 55.9 | +0.295 [-0.072, +0.720] | -1.013 | 1.48 | +0.074 [-0.227, +0.380] | 1.07 | 1.43 | 30.6 | 20.0 |
+| QG-b ATR2, סטופ נגרר 3ATR, 60d | all | 1133 | 487 | 38.9 | 0.0 | 28.5 | +0.172 [+0.026, +0.316] | -0.440 | 1.34 | -0.005 [-0.125, +0.107] | 0.66 | 1.34 | 89.4 | 17.4 |
+| QG-b ATR2, סטופ נגרר 3ATR, 60d | val | 946 | 402 | 37.8 | 0.0 | 28.8 | +0.142 [-0.025, +0.305] | -0.482 | 1.28 | -0.035 [-0.170, +0.098] | 0.52 | 1.14 | 89.4 | 17.4 |
+| QG-b ATR2, סטופ נגרר 3ATR, 60d | test | 187 | 86 | 44.4 | 0.0 | 27.3 | +0.326 [-0.013, +0.656] | -0.288 | 1.73 | +0.146 [-0.121, +0.390] | 1.63 | 1.93 | 12.4 | 17.6 |
 
 ### By market regime (all periods)
 
@@ -129,5 +135,25 @@ Model trade: next open, stop 1 ATR, target 3R, 10 sessions, cost 0.10 % + slippa
 | TF-b סטופ לפי שפל, 2R, 20d | n 9842, -0.067 [-0.131, -0.011] | n 975, -0.017 [-0.229, +0.178] | n 594, -0.137 [-0.352, +0.062] |
 | TF-c ATR2, סטופ נגרר 3ATR, 40d | n 9789, -0.073 [-0.144, +0.002] | n 970, +0.045 [-0.248, +0.459] | n 594, -0.368 [-0.556, -0.160] |
 | TF-d כניסה אחרי Retest, ATR2, 3R, 20d | n 6567, -0.056 [-0.146, +0.034] | n 617, -0.062 [-0.306, +0.278] | n 394, -0.231 [-0.427, -0.009] |
+| QG-a ATR2, 3R, 40d | n 814, +0.037 [-0.114, +0.198] | n 187, +0.075 [-0.250, +0.369] | n 149, -0.082 [-0.415, +0.225] |
+| QG-b ATR2, סטופ נגרר 3ATR, 60d | n 797, -0.007 [-0.140, +0.141] | n 187, +0.115 [-0.167, +0.394] | n 149, +0.077 [-0.230, +0.400] |
+
+## Monte Carlo: the next 50 trades (whole months of real trades drawn with replacement)
+
+| variant | median R | 5% | 95% | P(below 0) | median max DD R | 95% max DD R | P(DD >= 10R) |
+|---|---|---|---|---|---|---|---|
+| MR-a ATR1, 3R, 10d (המודל באתר) | +3.0 | -48.3 | +58.3 | 46% | 15.4 | 48.3 | 73% |
+| MR-b סטופ לפי שפל, 3R, 10d | +3.2 | -39.9 | +53.0 | 44% | 14.2 | 43.9 | 68% |
+| MR-c ATR1, 3R, יציאה בזמן 5d | -1.0 | -33.0 | +40.6 | 53% | 14.4 | 35.5 | 67% |
+| MR-d ATR1.5, סטופ נגרר 3ATR, 20d | +8.1 | -41.9 | +77.2 | 41% | 11.4 | 43.5 | 59% |
+| TF-a ATR2, 3R, 20d | +3.5 | -42.9 | +64.9 | 46% | 10.9 | 45.2 | 53% |
+| TF-b סטופ לפי שפל, 2R, 20d | +2.0 | -38.9 | +45.9 | 48% | 12.6 | 41.6 | 61% |
+| TF-c ATR2, סטופ נגרר 3ATR, 40d | -2.4 | -38.7 | +79.0 | 52% | 11.8 | 38.9 | 55% |
+| TF-d כניסה אחרי Retest, ATR2, 3R, 20d | -1.2 | -43.0 | +56.0 | 51% | 12.0 | 44.3 | 59% |
+| QG-a ATR2, 3R, 40d | +8.4 | -23.0 | +41.5 | 33% | 13.3 | 29.2 | 68% |
+| QG-b ATR2, סטופ נגרר 3ATR, 60d | +6.3 | -18.9 | +38.5 | 35% | 11.1 | 23.7 | 58% |
+
+Quality Growth: SEC point-in-time fundamentals for 86 of 89 stocks. Rule (fixed): revenue growth vs the same quarter a year earlier > 10 %, operating margin > 0 and not lower than a year earlier (values as first filed, usable from the day after filing), price above SMA200, relative strength vs SPY over 60 days > 0; one signal per stock per 20 sessions.
+Fundamental features, monthly IC with the model trade's R (validation): qg_yoy 0.008, qg_margin -0.0058, qg_dmargin 0.0015
 
 Sharpe/Sortino: monthly sums of R (1R per trade, every signal taken), annualised x sqrt(12). MaxDD: deepest fall of the cumulative-R curve ordered by exit date. These assume every signal is taken with equal risk; they are not account returns.
