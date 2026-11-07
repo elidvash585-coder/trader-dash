@@ -360,14 +360,14 @@ def strategy_of(x, fund=None, asset=None):
         return {"key": None, "name": "מחוץ ליקום המחקר", "evidence": "לא נבדק לנכס מהסוג הזה"}
     rsi = x.get("rsi")
     if rsi is not None and rsi < 35:
-        return {"key": "MR", "name": "Mean Reversion (מכירת יתר)", "evidence": "נבדק: יתרון חיובי, לא מובהק ברוב הגרסאות"}
+        return {"key": "MR", "name": "Mean Reversion (מכירת יתר)", "evidence": "נבדק: יתרון חיובי ולא מובהק; ב-50 עסקאות ירידה חציונית של כ-15R בדרך"}
     p = x.get("price")
     ma = [p > x[k] for k in ("sma20", "sma50", "sma150", "sma200") if x.get(k)] if p else []
     if ma and all(ma) and (x.get("rs_spy_60") or 0) > 0:
         return {"key": "TF", "name": "Trend Following (מגמה)", "evidence": "נבדק: ללא יתרון, פריצות היו שליליות מול יום אקראי"}
     f = fund or {}
     if (f.get("rev_growth") or 0) > 0.10 and (f.get("op_margin") or 0) > 0:
-        return {"key": "QG", "name": "Quality Growth (צמיחה איכותית)", "evidence": "עוד לא נבדק לאחור (שלב 3)"}
+        return {"key": "QG", "name": "Quality Growth (צמיחה איכותית)", "evidence": "נבדק (נתוני SEC לפי מועד הפרסום): ללא יתרון מעבר לכניסה ביום אקראי"}
     return {"key": None, "name": "אין מצב מוגדר", "evidence": ""}
 
 
