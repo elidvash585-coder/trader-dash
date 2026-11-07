@@ -414,7 +414,8 @@ def decide(x, hist, ind, plan, events=None, asset=None, fund=None, cfg=None):
 
     pros, cons = [], []
     if hv is not None and hv >= c.get("min_hist", 5.6):
-        pros.append("בעבר, מצב RSI כזה נתן יתרון של %+.2fR מול יום אקראי" % hist["edge"])
+        pros.append("בעבר, מצב RSI כזה נתן יתרון של %+.2fR מול יום אקראי (%s)" % (
+            hist["edge"], "מובהק" if hist.get("significant") else "קטן ולא מובהק, אבל נשמר מחוץ למדגם" if hist.get("stable") else "לא מובהק"))
     elif hv is not None and hv < 4.4:
         cons.append("בעבר, מצב RSI כזה היה חלש מיום אקראי (%+.2fR)" % hist["edge"])
     if iv is not None and iv >= 6.5:

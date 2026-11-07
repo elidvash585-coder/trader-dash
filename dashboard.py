@@ -1096,7 +1096,7 @@ def quick(sym, force=False):
                 "decision_score": dec["score"], "channel": t["channel"]["kind"], "name": f.get("name"),
                 "tm": {"p_target": tm["p_target"], "lean": tm["lean"]} if tm else None,
                 "score": sc["value"] if sc else None, "score_label": sc["label"] if sc else None, "act": dec["verdict"],
-                "p_profit": sc["p_profit"] if sc else None, "ind": isc["value"] if isc else None,
+                "p_profit": sc.get("p_profit") if sc else None, "ind": isc["value"] if isc else None,
                 "ext": {k: (a.get("ext") or {}).get(k) for k in ("session", "active", "price", "change", "gap", "volume", "vol_pct")}
                 if (a.get("ext") or {}).get("active") else None}
     except Exception as e:
