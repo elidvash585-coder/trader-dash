@@ -9,18 +9,22 @@ permissions:
 jobs:
   backtest:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install -q numpy pandas scikit-learn
-      - run: python backtest.py && python backtest2.py && python backtest3.py
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Research v2 (walk-forward, strategies)
+        run: python backtest4.py
       - name: Save the results in the repository
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add research
-          git commit -m "Backtest results" || echo "nothing new"
+          git commit -m "Research v2 results" || echo "nothing new"
+          git pull --rebase
           git push
