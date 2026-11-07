@@ -32,6 +32,7 @@ sys.path.insert(0, HERE)
 import features as FX  # noqa: E402  (v2 engine, standard library only)
 import market as MK  # noqa: E402
 import engine as EN  # noqa: E402
+import risk as RK  # noqa: E402
 try:
     import extras  # time machine, SEC, Congress (day-trader-skill)
 except Exception:
@@ -717,6 +718,38 @@ def sector_part(fund, t_last_bars):
         return None
 
 
+_pf = {"t": 0, "v": None}
+
+
+def portfolio_view(force=False):
+    """Local only: holdings.json next to the app. The public site never has it."""
+    hold = RK.read_holdings()
+    if hold is None:
+        return {"none": True, "path": RK.HOLDINGS}
+    if force or _pf["v"] is None or time.time() - _pf["t"] > 600:
+        fetch = demo_chart if DEMO else etf_rows_meta
+        _pf["v"] = RK.portfolio(hold, fetch, lambda s: (_fund_cache.get(s) or (0, None))[1])
+        _pf["t"] = time.time()
+    return _pf["v"]
+
+
+def etf_rows_meta(sym):
+    hit = _etf_cache.get("m:" + sym)
+    if hit and time.time() - hit[0] < 1800:
+        return hit[1]
+    v = chart(sym)
+    _etf_cache["m:" + sym] = (time.time(), v)
+    return v
+
+
+def peers_for(sym):
+    """Most correlated symbols in the watchlist (from bars already loaded). Overlap, not holdings."""
+    closes = {s: [(c[0], c[4]) for c in v[1]["candles"][-200:]] for s, v in list(_cache.items())}
+    if sym not in closes or len(closes) < 3:
+        return None
+    return RK.watchlist_peers(closes).get(sym)
+
+
 def events_for(fund, sec, ext, plan2):
     """Facts only (earnings date, SEC filings, extended-hours price). Unknown stays unknown."""
     ev = {"earnings_known": False, "earnings_days": None, "sec_known": sec is not None, "sec_material": None,
@@ -1042,6 +1075,11 @@ def analyze(sym, force=False):
     out["sector"] = sector_part(out["fund"], ([x[0] for x in cs], [x[4] for x in cs]))
     out["market"] = {k: (market_ctx() or {}).get(k) for k in ("regime", "vix")}
     out["ind_score"] = ind_score(base["tech"], out["plan"], out["fund"], out["tm"], sector=out["sector"])
+    try:
+        out["peers"] = peers_for(sym)
+    except Exception:
+        out["peers"] = None
+    out["mc"] = (EN.TABLE or {}).get("mc")
     if out["score"]:
         out["decision"]["code"] = out["score"]["code"]
     hist, plan2, dec = engine_block(base["tech"], out["fund"], out["sec"], base.get("ext"), out["ind_score"])
@@ -1095,7 +1133,7 @@ def quick(sym, force=False):
                 "spark": [x[4] for x in a["candles"][-60:]], "decision": dec["verdict"], "decision_code": dec["code"],
                 "decision_score": dec["score"], "channel": t["channel"]["kind"], "name": f.get("name"),
                 "tm": {"p_target": tm["p_target"], "lean": tm["lean"]} if tm else None,
-                "score": sc["value"] if sc else None, "score_label": sc["label"] if sc else None, "act": dec["verdict"],
+                "score": sc["value"] if sc else None, "score_label": sc["label"] if sc else None, "act": dec["verdict"], "act_code": d2["code"] if t.get("fx") else None,
                 "p_profit": sc.get("p_profit") if sc else None, "ind": isc["value"] if isc else None,
                 "ext": {k: (a.get("ext") or {}).get(k) for k in ("session", "active", "price", "change", "gap", "volume", "vol_pct")}
                 if (a.get("ext") or {}).get("active") else None}
@@ -1219,6 +1257,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, analyze(q["symbol"][0], force))
             if u.path == "/api/config":
                 return self.send(200, load_config())
+            if u.path == "/api/portfolio":
+                return self.send(200, portfolio_view(force))
             return self.send(404, {"error": "not found"})
         except Exception as e:
             return self.send(500, {"error": str(e)})

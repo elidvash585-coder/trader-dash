@@ -12,6 +12,7 @@ import sys
 import time
 
 import dashboard as D
+import risk as RK
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "site")
@@ -33,25 +34,36 @@ def main():
             print("congress: %s" % (cg.get("_meta") or cg.get("_note")), flush=True)
         except Exception as e:
             print("congress skipped: %s" % str(e)[:160], flush=True)
-    rows, ok = [], 0
+    rows, ok, full = [], 0, {}
     for sym in wl["symbols"]:
         try:
             a = D.analyze(sym)
             a["congress"] = cg.get(sym, []) if "_note" not in cg else None
             a["ind_score"] = D.ind_score(a["tech"], a["plan"], a["fund"], a.get("tm"), a["congress"], sector=a.get("sector"))
-            with open(os.path.join(OUT, "data", safe(sym) + ".json"), "w", encoding="utf-8") as fh:
-                json.dump(a, fh, ensure_ascii=False, separators=(",", ":"))
+            hist, plan2, dec = D.engine_block(a["tech"], a["fund"], a.get("sec"), a.get("ext"), a["ind_score"])
+            if hist is not None:
+                dec["ext_alerts"] = (a.get("decision") or {}).get("ext_alerts")
+                a["score"], a["plan2"], a["decision"] = hist, plan2, dec
+            full[sym] = a
             q = D.quick(sym)
             q["congress"] = len(a["congress"] or [])
             q["ind"] = a["ind_score"]["value"] if a.get("ind_score") else None
+            if hist is not None:
+                q.update(score=hist["value"], score_label=hist["label"], decision_code=hist["code"], act=dec["verdict"], act_code=dec["code"])
             rows.append(q)
             ok += 1
-            print("ok   %-8s %s" % (sym, a.get("decision", {}).get("verdict", "")), flush=True)
+            print("ok   %-8s %s" % (sym, (a.get("decision") or {}).get("verdict", "")), flush=True)
         except Exception as e:
             rows.append({"symbol": sym, "error": str(e)[:160]})
             print("FAIL %-8s %s" % (sym, str(e)[:160]), flush=True)
         if not D.DEMO:
             time.sleep(0.4)
+    # watchlist overlap: most correlated symbols (daily returns, last 120 sessions)
+    peers = RK.watchlist_peers({s: [(c[0], c[4]) for c in a["candles"][-200:]] for s, a in full.items()})
+    for sym, a in full.items():
+        a["peers"] = peers.get(sym)
+        with open(os.path.join(OUT, "data", safe(sym) + ".json"), "w", encoding="utf-8") as fh:
+            json.dump(a, fh, ensure_ascii=False, separators=(",", ":"))
     now = datetime.datetime.now(datetime.timezone.utc)
     index = {"meta": {"watchlist": wl, "demo": D.DEMO, "static": True,
                       "built_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),

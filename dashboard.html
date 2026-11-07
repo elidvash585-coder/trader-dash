@@ -187,7 +187,7 @@ td.n{font-family:var(--mono);direction:ltr;text-align:left}
       <div class="row static-hide"><input id="addInp" placeholder="הוסף טיקר (MSFT)" onkeydown="if(event.key==='Enter')addSym()"><button onclick="addSym()">+</button></div>
       <div class="row" style="justify-content:space-between">
         <div class="flt" id="flt"></div>
-        <select id="sortSel" onchange="state.sort=this.value;renderWL()"><option value="list">סדר שלי</option><option value="dec">לפי ציון היסטורי</option><option value="ind">לפי ציון אינדיקטורים</option><option value="both">לפי ממוצע שניהם</option><option value="chg">לפי שינוי</option><option value="ext">לפי pre-market</option><option value="sym">א-ב</option></select>
+        <select id="sortSel" onchange="state.sort=this.value;renderWL()"><option value="list">סדר שלי</option><option value="dec">לפי ציון היסטורי</option><option value="ind">לפי ציון אינדיקטורים</option><option value="act">לפי החלטה</option><option value="both">לפי ממוצע שניהם</option><option value="chg">לפי שינוי</option><option value="ext">לפי pre-market</option><option value="sym">א-ב</option></select>
       </div>
     </div>
     <div class="wlcols"><span>מניה</span><span style="text-align:left">מחיר</span><span style="text-align:center" title="ציון מההיסטוריה (נבדק לאחור)">היסטורי</span><span style="text-align:center" title="ציון אינדיקטורים (משקל שווה, לא נבדק)">אינד׳</span></div>
@@ -257,6 +257,7 @@ function renderWL(){
   let rows=state.rows.filter(r=>state.filter==='all'||r.decision_code===state.filter);
   const rank={go:0,wait:1,no:2};
   if(state.sort==='dec')rows=[...rows].sort((a,b)=>(b.score??-1)-(a.score??-1));
+  if(state.sort==='act'){const o={go:0,wait:1,watch:2,exposure:3};rows=[...rows].sort((a,b)=>((o[a.act_code]??4)-(o[b.act_code]??4))||((b.score??-1)-(a.score??-1))||((b.ind??-1)-(a.ind??-1)))}
   if(state.sort==='ind')rows=[...rows].sort((a,b)=>(b.ind??-1)-(a.ind??-1));
   if(state.sort==='both')rows=[...rows].sort((a,b)=>((b.score??0)+(b.ind??0))-((a.score??0)+(a.ind??0)));
   if(state.sort==='chg')rows=[...rows].sort((a,b)=>(b.change_1d??-99)-(a.change_1d??-99));
@@ -382,6 +383,8 @@ function advSec(d){const x=d.tech.fx||{},rg=(d.market||{}).regime||{},se=d.secto
    <div class="kvs" style="margin-top:8px"><div><label>ADX (עוצמת מגמה)</label><b>${fmt(x.adx,0)} <small class="dim">${x.adx>=20?'מגמה':'דשדוש'}</small></b></div><div><label>מבנה</label><b style="font-family:Heebo;font-size:12px">${x.state!=null?S[x.state]:'—'}${x.failed_bo?' · פריצה שנכשלה':''}</b></div>
    <div><label>ATR% · אחוזון שנתי</label><b>${fmt(x.atr_pct,1)}% · ${fmt(x.atr_pctile,0)}</b></div><div><label>תנודתיות ממומשת 20 יום</label><b>${fmt(x.rv20,0)}%</b></div>
    ${f.peg!=null||f.fwd_pe!=null?`<div><label>PEG · מכפיל עתידי</label><b>${fmt(f.peg,1)} · ${fmt(f.fwd_pe,1)}</b></div>`:''}${f.op_margin!=null?`<div><label>שולי תפעול · FCF</label><b>${pct(f.op_margin*100,0)} · ${f.fcf!=null&&f.revenue?pct(f.fcf/f.revenue*100,0):'—'}</b></div>`:''}</div>
+   ${d.peers&&d.peers.length?`<div style="font-size:12px;margin-top:8px"><span class="dim">הכי מתואמות ברשימת המעקב (120 יום):</span> ${d.peers.map(p=>`<b>${p[0]}</b> <span class="num dim">${fmt(p[1],2)}</span>`).join(' · ')} <span class="dim">· כניסה לכמה מהן יחד היא כמעט אותו הימור</span></div>`:''}
+   ${d.mc?`<div style="font-size:12px;margin-top:8px;line-height:1.55"><span class="dim">Monte Carlo, ${d.mc.trades} העסקאות הבאות במודל (${d.mc.paths.toLocaleString()} מסלולים מחודשים אמיתיים):</span> חציון <b class="num">${d.mc.median_R>0?'+':''}${fmt(d.mc.median_R,1)}R</b>, 5% הגרועים <b class="num down">${fmt(d.mc.p05_R,1)}R</b>, סיכוי לסיים בהפסד <b class="num">${fmt(d.mc.p_below0,0)}%</b>. ירידה מקסימלית בדרך: חציון <b class="num">${fmt(d.mc.dd_median_R,1)}R</b>, ב-5% הגרועים <b class="num down">${fmt(d.mc.dd_p95_R,1)}R</b> <span class="dim">(R = הסכום שמוכנים להפסיד בעסקה). לפי ההיסטוריה, לא תחזית.</span></div>`:''}
    <p class="dim" style="font-size:11px;margin-top:8px">${x.bar_partial_excluded?'הנר של היום עוד בתהליך ולא נכלל בחישובים. ':''}מחקר מלא: <a href="https://github.com/elidvash585-coder/trader-dash/blob/main/research/REPORT4.md" target="_blank" rel="noopener" style="color:var(--acc)">REPORT4</a>. ערכים מחושבים מנרות יומיים סגורים.</p></details>`}
 
 /* ---------- bottom ---------- */
@@ -420,6 +423,32 @@ function secInsights(q){const L=[];if(!q||!q.length)return L;const c=q[0],p=q[1]
   if(q.length>=3&&q[0].revenue_yoy!=null&&q[1].revenue_yoy!=null&&q[2].revenue_yoy!=null){const acc=q[0].revenue_yoy>q[1].revenue_yoy&&q[1].revenue_yoy>q[2].revenue_yoy,dec=q[0].revenue_yoy<q[1].revenue_yoy&&q[1].revenue_yoy<q[2].revenue_yoy;
     if(acc)L.push(['up','הצמיחה מאיצה: שלושה רבעונים ברצף של צמיחה שנתית גבוהה יותר.']);if(dec)L.push(['warn','הצמיחה מאטה: שלושה רבעונים ברצף של צמיחה שנתית נמוכה יותר.'])}
   return L}
+async function loadPf(force){const el=$('#pfCard');if(!el)return;
+  if(!state.pf||force){try{state.pf=await api('/api/portfolio'+(force?'?refresh=1':''))}catch(e){state.pf={error:e.message}}}
+  const p=state.pf,el2=$('#pfCard');if(!el2)return;el2.innerHTML=pfHtml(p)}
+function pfHtml(p){
+  const head=`<summary><h3 style="display:inline">סיכוני תיק <span class="mute" style="font-size:11.5px;font-weight:400">מקומי בלבד, מהקובץ holdings.json</span></h3></summary>`;
+  if(!p||p.error)return `<details>${head}<p class="dim">${p&&p.error||''}</p></details>`;
+  if(p.none)return `<details>${head}<p style="font-size:12.5px;margin-top:8px">רשימת המעקב היא לא תיק, לכן כאן לא מוצג כלום עד שתזין החזקות. צור קובץ <b>holdings.json</b> בתיקיית האפליקציה, למשל:</p><pre class="num" style="font-size:11.5px;background:var(--bg2);padding:8px;border-radius:8px;direction:ltr;text-align:left;overflow:auto">{"cash": 2000, "positions": [
+  {"symbol": "NVDA", "qty": 10, "stop": 160.5, "cost": 120},
+  {"symbol": "RDTL", "qty": 100}
+]}</pre><p class="dim" style="font-size:11px">הקובץ נשאר רק במחשב שלך ולא עולה לאתר הציבורי.</p></details>`;
+  const pc=v=>v==null?'—':`<span class="${cls(v)}">${v>0?'+':''}${fmt(v,1)}%</span>`,m=p.mc||{};
+  return `<details>${head}<div class="grid4" style="margin-top:10px">
+   <div class="kv"><label>שווי כולל</label><b>$${fmt(p.equity,0)}</b></div><div class="kv"><label>חשיפה אפקטיבית</label><b>${fmt(p.effective_exposure_pct,0)}%</b></div>
+   <div class="kv"><label>הפוזיציה הגדולה</label><b>${p.largest} · ${fmt(p.largest_pct,0)}%</b></div><div class="kv"><label>מספר פוזיציות אפקטיבי</label><b>${fmt(p.effective_n,1)}</b></div>
+   <div class="kv"><label>סיכון עד הסטופים</label><b class="down">$${fmt(p.risk_to_stops,0)} · ${fmt(p.risk_to_stops_pct,1)}%</b></div><div class="kv"><label>מתאם ממוצע</label><b>${fmt(p.corr_avg,2)}</b></div></div>
+   ${ins([].concat(p.without_stop.length?[['warn',`בלי סטופ: ${p.without_stop.join(', ')}. הסיכון שלהן לא נכלל בסיכון עד הסטופים.`]]:[],
+      p.leveraged.length?[['warn',`מוצרים ממונפים: ${p.leveraged.join(', ')}. החשיפה האפקטיבית סופרת אותם לפי המינוף, והסימולציה כוללת את שחיקת המסלול היומי.`]]:[],
+      p.corr_high.length?[['acc',`זוגות מתואמים מאוד (0.7+): ${p.corr_high.map(x=>x[0]+'/'+x[1]+' '+fmt(x[2],2)).join(', ')}. הם מתנהגים כמו הימור אחד.`]]:[],
+      [['acc','סקטורים: '+p.sectors.map(x=>x[0]+' '+fmt(x[1],0)+'%').join(' · ')]]))}
+   <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;margin-top:10px">
+   <div><div class="mute" style="font-size:12px;margin-bottom:6px">תרחישי לחץ</div>${p.stress.map(x=>`<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:3px 0;border-bottom:1px solid var(--line)"><span>${x.name}</span><b class="num down">$${fmt(x.pnl,0)} · ${fmt(x.pct,1)}%</b></div>`).join('')}</div>
+   <div><div class="mute" style="font-size:12px;margin-bottom:6px">Monte Carlo (${(m.paths||0).toLocaleString()} מסלולים מ-${m.from_days||0} ימים אמיתיים)</div>
+   ${['10','20'].filter(k=>m[k]).map(k=>`<div style="font-size:12.5px;padding:3px 0;border-bottom:1px solid var(--line)"><b>${k} ימים:</b> חציון ${pc(m[k].median)}, 5% הגרועים ${pc(m[k].p05)}, ממוצע הזנב ${pc(m[k].es05)}, סיכוי להפסד 10%+ <b class="num">${fmt(m[k].p_loss10,1)}%</b>, ירידה מקסימלית ב-5% הגרועים ${pc(-m[k].dd_p95)}</div>`).join('')||'<span class="dim">אין מספיק היסטוריה משותפת</span>'}</div></div>
+   <table style="width:100%;font-size:12px;margin-top:10px;border-collapse:collapse"><tr class="dim"><td>נכס</td><td>כמות</td><td>שווי</td><td>משקל</td><td>בטא</td><td>תנודתיות</td><td>עד הסטופ</td></tr>
+   ${p.positions.map(x=>`<tr style="border-top:1px solid var(--line)"><td><b>${x.symbol}</b>${x.asset.leverage!==1?` <small class="warn">x${x.asset.leverage}</small>`:''}</td><td class="num">${x.qty}</td><td class="num">$${fmt(x.value,0)}</td><td class="num">${fmt(x.weight,1)}%</td><td class="num">${fmt(x.beta,2)}</td><td class="num">${fmt(x.vol,0)}%</td><td class="num">${x.risk_to_stop!=null?'$'+fmt(x.risk_to_stop,0):'—'}</td></tr>`).join('')}</table>
+   <p class="dim" style="font-size:11px;margin-top:8px">תרחישי SPY לפי בטא של שנה. החלון הגרוע וה-Monte Carlo משחזרים תשואות יומיות אמיתיות של כל הנכסים יחד (שומר על המתאם), בכמויות של היום. הסטופ אינו הפסד מקסימלי. אלה תוצאות של מודל, לא תחזית.</p></details>`}
 function validCard(d){const ev=(d.decision_v1||d.decision||{}).evidence;if(!ev)return'';const m=((d.score||{}).meta)||null;const mx=Math.max(...ev.setups.map(x=>Math.abs(x[1])))||1;
   return `<div class="card c12"><h3>תוקף המודל: בדיקה לאחור <span class="mute" style="font-size:11.5px;font-weight:400">${m?`מחקר v2: ${m.stocks} מניות, ${m.from} עד ${m.to} · מחקר קודם: `:''}${ev.stocks} מניות, ${ev.period}</span></h3>
    <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px">
@@ -470,9 +499,9 @@ function renderBottom(){const d=state.data,t=d.tech,v=t.volume,f=d.fund||{},a=f.
    h+=`<div class="card c6"><h3>תחזיות ודוחות ${f.next_earnings?`<span class="rec wait" style="padding:2px 8px">דוח הבא ${f.next_earnings}</span>`:''}</h3><table><tr><th>תקופה</th><th>EPS צפוי</th><th>לעומת שנה קודמת</th><th>הכנסות צפויות</th><th>צמיחה</th></tr>
      ${(f.estimates||[]).map(e=>`<tr><td>${PER[e.period]||e.period}</td><td class="n">${fmt(e.eps_avg)}</td><td class="n">${fmt(e.eps_year_ago)}</td><td class="n">${big(e.rev_avg)}</td><td class="n ${cls(e.rev_growth)}">${P(e.rev_growth)}</td></tr>`).join('')}</table>
      <table style="margin-top:14px"><tr><th>רבעון</th><th>EPS בפועל</th><th>צפי</th><th>הפתעה</th></tr>${(f.eps_history||[]).map(e=>`<tr><td class="n">${e.q||''}</td><td class="n">${fmt(e.actual)}</td><td class="n">${fmt(e.estimate)}</td><td class="n ${cls(e.surprise)}">${P(e.surprise)}</td></tr>`).join('')}</table></div>`}
-  h+=validCard(d)+secCard(d)+congressCard(d);
+  h+=validCard(d)+secCard(d)+congressCard(d)+(STATIC?'':'<div class="card c12" id="pfCard"></div>');
   h+=`<div class="card c12 news"><h3>חדשות אחרונות</h3>${(d.news||[]).map(n=>`<a href="${n.link}" target="_blank" rel="noopener"><small>${n.time||''}</small>${n.tags.map(x=>`<span class="tag">${TAGHE[x]||x}</span>`).join('')} ${n.title}</a>`).join('')||'<div class="mute">אין כותרות.</div>'}</div>`;
-  $('#bottom').innerHTML=h}
+  $('#bottom').innerHTML=h;if(!STATIC)loadPf()}
 
 /* ---------- charts ---------- */
 let mainC=null,indC=null;

@@ -184,6 +184,7 @@ def simulate(o, h, l, c, atr, swing, idx, v):
 
 
 MODEL_TRADE = {"stop": "atr", "k": 1.0, "tgt": 3.0, "hz": 10}
+PIT = {}  # sym -> point-in-time SEC fundamentals (filled in main when SEC_USER_AGENT is set)
 VARIANTS = {
     "MR": {"MR-a ATR1, 3R, 10d (המודל באתר)": MODEL_TRADE,
            "MR-b סטופ לפי שפל, 3R, 10d": {"stop": "swing", "tgt": 3.0, "hz": 10},
@@ -193,7 +194,105 @@ VARIANTS = {
            "TF-b סטופ לפי שפל, 2R, 20d": {"stop": "swing", "tgt": 2.0, "hz": 20},
            "TF-c ATR2, סטופ נגרר 3ATR, 40d": {"stop": "atr", "k": 2.0, "tgt": None, "trail": 3.0, "hz": 40},
            "TF-d כניסה אחרי Retest, ATR2, 3R, 20d": {"stop": "atr", "k": 2.0, "tgt": 3.0, "hz": 20, "entry": "retest"}},
+    "QG": {"QG-a ATR2, 3R, 40d": {"stop": "atr", "k": 2.0, "tgt": 3.0, "hz": 40},
+           "QG-b ATR2, סטופ נגרר 3ATR, 60d": {"stop": "atr", "k": 2.0, "tgt": None, "trail": 3.0, "hz": 60}},
 }
+
+
+# ---------------------------------------------------------------- SEC fundamentals, point in time
+
+def _sec_get(url, ua):
+    import gzip
+    import urllib.request
+    req = urllib.request.Request(url, headers={"User-Agent": ua, "Accept-Encoding": "gzip"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        raw = r.read()
+        if r.headers.get("Content-Encoding") == "gzip":
+            raw = gzip.decompress(raw)
+    time.sleep(0.15)  # SEC fair use: under 10 requests a second
+    return json.loads(raw.decode("utf-8"))
+
+
+def pit_quarters(cf, concepts):
+    """{period_end: (value, filed)} three-month values as FIRST reported (later restatements are ignored,
+    because they were not known at the time). Q4 = annual - Q1..Q3, known when the 10-K was filed."""
+    merged = {}
+    for concept in concepts:
+        node = cf.get("facts", {}).get("us-gaap", {}).get(concept)
+        if not node or "USD" not in node.get("units", {}):
+            continue
+        first = {}
+        for f in node["units"]["USD"]:
+            if "start" not in f or (f.get("form") or "").split("/")[0] not in ("10-Q", "10-K"):
+                continue
+            k = (f["start"], f["end"])
+            if k not in first or f["filed"] < first[k]["filed"]:
+                first[k] = f
+        q, years = {}, []
+        for (st, en), f in first.items():
+            days = (datetime.date.fromisoformat(en) - datetime.date.fromisoformat(st)).days
+            if 80 <= days <= 100:
+                q[en] = (float(f["val"]), f["filed"], st)
+            elif 350 <= days <= 380:
+                years.append((st, en, f))
+        for st, en, f in years:
+            if en in q:
+                continue
+            ins = sorted([v for e, v in q.items() if v[2] >= st and e < en], key=lambda v: v[2])
+            if len(ins) == 3:
+                q[en] = (float(f["val"]) - sum(v[0] for v in ins), max([f["filed"]] + [v[1] for v in ins]), st)
+        for en, v in q.items():
+            merged.setdefault(en, v)
+    return {e: (v[0], v[1]) for e, v in merged.items()}
+
+
+def sec_pit_frame(sym, ua, cik_map):
+    """Daily-usable table: from each filing date on, revenue growth vs the same quarter a year earlier,
+    operating margin and its change vs a year earlier. Only values filed by that date."""
+    import facts as FA
+    cik = cik_map.get(sym.upper().replace(".", "-"))
+    if not cik:
+        return None
+    cf = _sec_get(FA.FACTS_URL % cik, ua)
+    rev = pit_quarters(cf, FA.CONCEPTS["revenue"])
+    op = pit_quarters(cf, FA.CONCEPTS["operating_income"])
+    ends = sorted(rev)
+    ev = []
+    for e in ends:
+        de = datetime.date.fromisoformat(e)
+        prev = [x for x in ends if abs((de - datetime.date.fromisoformat(x)).days - 365) <= 15]
+        if not prev or rev[prev[0]][0] <= 0:
+            continue
+        e0 = prev[0]
+        yoy = rev[e][0] / rev[e0][0] - 1
+        known = max(rev[e][1], rev[e0][1])
+        mg = mg0 = None
+        if e in op and e0 in op and rev[e][0] > 0:
+            mg, mg0 = op[e][0] / rev[e][0], op[e0][0] / rev[e0][0]
+            known = max(known, op[e][1], op[e0][1])
+        ev.append({"known": pd.Timestamp(known) + pd.Timedelta(days=1), "end": pd.Timestamp(e), "yoy": yoy,
+                   "margin": mg, "dmargin": (mg - mg0) if mg is not None else None})
+    if not ev:
+        return None
+    return pd.DataFrame(ev).sort_values("known")
+
+
+def attach_pit(df, fr):
+    """As-of join: each day gets the latest event already known on that day."""
+    if fr is None or not len(fr):
+        for c in ("qg_yoy", "qg_margin", "qg_dmargin", "qg_age"):
+            df[c] = np.nan
+        return df
+    fr = fr.sort_values("known").drop_duplicates("known", keep="last").copy()
+    fr["known"] = fr["known"].astype("datetime64[ns]")
+    fr["end"] = fr["end"].astype("datetime64[ns]")
+    left = df[["date"]].reset_index()
+    left["date"] = left["date"].astype("datetime64[ns]")
+    m = pd.merge_asof(left, fr.rename(columns={"known": "date"}), on="date", direction="backward")
+    m = m.set_index("index")
+    df["qg_yoy"], df["qg_margin"], df["qg_dmargin"] = m["yoy"], m["margin"], m["dmargin"]
+    df["qg_age"] = (df.date.astype("datetime64[ns]") - m["end"]).dt.days
+    return df
 
 
 # ---------------------------------------------------------------- statistics
@@ -393,7 +492,16 @@ def build_panel(syms, sect):
             mr = df.index[(df.rsi < 30)].to_numpy()
             hi20 = pd.Series(C).shift(1).rolling(20).max()
             tf = df.index[(df.price > df.sma50) & (df.sma50 > df.sma200) & (df.rs_spy_60 > 0) & (df.adx > 20) & (df.price > hi20)].to_numpy()
-            for fam_, ix in (("MR", mr), ("TF", tf)):
+            df = attach_pit(df, PIT.get(s))
+            qcond = ((df.qg_yoy > 0.10) & (df.qg_margin > 0) & (df.qg_dmargin >= 0) & (df.qg_age <= 200)
+                     & (df.price > df.sma200) & (df.rs_spy_60 > 0)).to_numpy()
+            qg, last_i = [], -999
+            for i_ in np.flatnonzero(qcond):  # one signal per 20 sessions per stock (no stacking)
+                if i_ - last_i >= 20:
+                    qg.append(i_)
+                    last_i = i_
+            qg = np.asarray(qg, dtype=int)
+            for fam_, ix in (("MR", mr), ("TF", tf), ("QG", qg)):
                 for vname, v in VARIANTS[fam_].items():
                     Rv, kv, dv, rv = simulate(O, H, L, C, f["atr"], f["swing_low"], ix, v)
                     Rb, kb, db, rb = simulate(O, H, L, C, f["atr"], f["swing_low"], idx, dict(v, entry=None))
@@ -407,7 +515,7 @@ def build_panel(syms, sect):
                     trades[vname]["base"].append(base.dropna(subset=["R"]))
             df = df.iloc[252:]
             parts.append(df.drop(columns=[c_ for c_ in ("res", "swing_low", "last_ph", "pdi", "ndi") if c_ in df]))
-            print("ok   %-6s %5d rows  %-4s MR %d TF %d" % (s, len(df), etf or "-", len(mr), len(tf)), flush=True)
+            print("ok   %-6s %5d rows  %-4s MR %d TF %d QG %d" % (s, len(df), etf or "-", len(mr), len(tf), len(qg)), flush=True)
         except Exception as e:
             print("FAIL %-6s %s" % (s, str(e)[:120]), flush=True)
         if not D.DEMO:
@@ -624,6 +732,28 @@ def score_table_v2(panel):
             "excluded": "crypto, leveraged and inverse ETFs (not in the research universe)"}
 
 
+def mc_sequences(sig, n_trades=50, paths=2000, seed=21):
+    """Monte Carlo of the NEXT n_trades of a strategy: whole calendar months of real trades are drawn
+    with replacement and laid end to end (trades in the same month stay together, so the clustering of
+    signals in sell-offs is kept). Cumulative R, worst drawdown in R, chance of ending below zero."""
+    if len(sig) < 100:
+        return None
+    rng = np.random.default_rng(seed)
+    groups = [g.sort_values("date").R.to_numpy() for _, g in sig.groupby("month")]
+    tot, dd = np.empty(paths), np.empty(paths)
+    for k in range(paths):
+        seq = []
+        while len(seq) < n_trades:
+            seq.extend(groups[rng.integers(0, len(groups))])
+        eq = np.cumsum(seq[:n_trades])
+        tot[k] = eq[-1]
+        dd[k] = float((np.maximum.accumulate(np.maximum(eq, 0)) - eq).max())
+    q = lambda a, p: round(float(np.percentile(a, p)), 2)
+    return {"trades": n_trades, "paths": paths, "median_R": q(tot, 50), "p05_R": q(tot, 5), "p95_R": q(tot, 95),
+            "p_below0": round(float((tot < 0).mean() * 100), 1), "dd_median_R": q(dd, 50), "dd_p95_R": q(dd, 95),
+            "p_dd10": round(float((dd >= 10).mean() * 100), 1), "months": len(groups)}
+
+
 def sensitivity(panel):
     """RSI<30 model trade edge across stop/target/horizon (all on the same signals), validation period."""
     return None  # computed in backtest2.py (32 variants); not repeated here
@@ -713,6 +843,18 @@ def report(res):
             x = r["by_regime"][g]
             cells.append("n %d, %s %s" % (x["n"], "%+.3f" % x["edge"] if x["edge"] is not None else "—", fmt_ci(x["edge_ci"])))
         L.append("| %s | %s |" % (name, " | ".join(cells)))
+    L += ["", "## Monte Carlo: the next 50 trades (whole months of real trades drawn with replacement)", "",
+          "| variant | median R | 5% | 95% | P(below 0) | median max DD R | 95% max DD R | P(DD >= 10R) |", "|---|---|---|---|---|---|---|---|"]
+    for name, m in (res.get("mc") or {}).items():
+        if m:
+            L.append("| %s | %+.1f | %+.1f | %+.1f | %.0f%% | %.1f | %.1f | %.0f%% |" % (
+                name, m["median_R"], m["p05_R"], m["p95_R"], m["p_below0"], m["dd_median_R"], m["dd_p95_R"], m["p_dd10"]))
+    L += ["", "Quality Growth: %s. Rule (fixed): revenue growth vs the same quarter a year earlier > 10 %%, operating "
+          "margin > 0 and not lower than a year earlier (values as first filed, usable from the day after filing), "
+          "price above SMA200, relative strength vs SPY over 60 days > 0; one signal per stock per 20 sessions." % res.get("qg_note", "")]
+    if res.get("qg_features"):
+        L.append("Fundamental features, monthly IC with the model trade's R (validation): " + ", ".join(
+            "%s %s" % (k, v["all"]["ic"]) for k, v in res["qg_features"].items()))
     L += ["", "Sharpe/Sortino: monthly sums of R (1R per trade, every signal taken), annualised x sqrt(12). "
           "MaxDD: deepest fall of the cumulative-R curve ordered by exit date. These assume every signal is taken "
           "with equal risk; they are not account returns."]
@@ -725,6 +867,25 @@ def main():
     wl = [s for s in D.read_watchlist()["symbols"] if s not in B.SKIP]
     syms = list(dict.fromkeys(wl + B.EXTRA))[: (25 if D.DEMO else None)]
     sect = sectors(syms)
+    ua = os.environ.get("SEC_USER_AGENT")
+    if ua and not D.DEMO:
+        try:
+            tick = _sec_get("https://www.sec.gov/files/company_tickers.json", ua)
+            cik_map = {v["ticker"].upper(): str(v["cik_str"]).zfill(10) for v in tick.values()}
+            for s_ in syms:
+                try:
+                    PIT[s_] = sec_pit_frame(s_, ua, cik_map)
+                    print("sec  %-6s %s quarters" % (s_, 0 if PIT[s_] is None else len(PIT[s_])), flush=True)
+                except Exception as e:
+                    print("sec  %-6s FAIL %s" % (s_, str(e)[:80]), flush=True)
+        except Exception as e:
+            print("SEC unavailable: %s" % e, flush=True)
+    elif D.DEMO:  # synthetic quarterly events, only to test the code path
+        rnd = np.random.default_rng(1)
+        for s_ in syms:
+            dts = pd.date_range("2017-03-01", periods=38, freq="QS")
+            PIT[s_] = pd.DataFrame({"known": dts + pd.Timedelta(days=40), "end": dts, "yoy": rnd.normal(0.1, 0.15, 38),
+                                    "margin": rnd.normal(0.1, 0.1, 38), "dmargin": rnd.normal(0, 0.03, 38)})
     panel, trades = build_panel(syms, sect)
     print("panel %d rows, %d stocks" % (len(panel), panel.sym.nunique()), flush=True)
     models = ("M0", "M1", "M2", "M3")
@@ -745,6 +906,14 @@ def main():
         base = d.R.mean()
         res["rsi_table_10y"][part] = {b: {"n": int(len(g)), "edge": round(float(g.R.mean() - base), 3)} for b, g in d.groupby("bucket")}
     st = score_table_v2(panel)
+    mr_name = [k for k in VARIANTS["MR"]][0]
+    st["mc"] = mc_sequences(trades[mr_name]["sig"]) if mr_name in trades else None
+    res["mc"] = {k: mc_sequences(trades[k]["sig"]) for k in trades}
+    res["qg_note"] = ("SEC point-in-time fundamentals for %d of %d stocks" % (sum(1 for v in PIT.values() if v is not None), len(syms))
+                      if PIT else "SEC_USER_AGENT not set: Quality Growth not tested")
+    if not D.DEMO:
+        qd = panel[panel.date < TEST_FROM]
+        res["qg_features"] = {c: {"all": monthly_ic(qd, c)} for c in ("qg_yoy", "qg_margin", "qg_dmargin") if c in qd}
     if not D.DEMO:
         with open(os.path.join(OUT, "score_table_v2.json"), "w", encoding="utf-8") as fh:
             json.dump(st, fh, ensure_ascii=False, indent=1)
