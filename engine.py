@@ -237,7 +237,7 @@ def _lvl(m, zero, good):
 # ================================================================ historical score v2
 RSI_BINS = [(0, 20, "<20"), (20, 25, "20-25"), (25, 30, "25-30"), (30, 35, "30-35"), (35, 40, "35-40"),
             (40, 50, "40-50"), (50, 60, "50-60"), (60, 70, "60-70"), (70, 101, ">70")]
-NOT_COVERED = {"crypto": "קריפטו", "leveraged_etf": "תעודת סל ממונפת", "inverse_etf": "תעודת סל הפוכה"}
+NOT_COVERED = {"crypto": "קריפטו", "leveraged_etf": "תעודת סל ממונפת", "inverse_etf": "תעודת סל הפוכה", "etf": "תעודת סל"}
 
 
 def load_table():
@@ -279,7 +279,7 @@ def hist_score(rsi, asset=None, blockers=None, tab=None, cfg=None):
         return base
     at = (asset or {}).get("type")
     if at in NOT_COVERED:
-        base["reasons"].append(("warn", "%s לא נכללה במחקר (רק מניות ותעודות סל רגילות), לכן אין ציון היסטורי." % NOT_COVERED[at]))
+        base["reasons"].append(("warn", "%s לא נכללה במחקר (רק מניות), לכן אין ציון היסטורי." % NOT_COVERED[at]))
         return base
     if rsi is None:
         base["reasons"].append(("warn", "אין RSI."))
@@ -409,7 +409,7 @@ def decide(x, hist, ind, plan, events=None, asset=None, fund=None, cfg=None):
         item("המחיר מחוץ לשעות המסחר לא מתחת לסטופ", not ev["premarket_below_stop"], "")
     covered = (asset or {}).get("type") not in NOT_COVERED
     item("הנכס בתוך יקום המחקר והנתונים תקינים", covered,
-         "מניה או תעודת סל רגילה" if covered else NOT_COVERED.get((asset or {}).get("type"), ""))
+         "מניה" if covered else NOT_COVERED.get((asset or {}).get("type"), ""))
     items = items[:7]
 
     pros, cons = [], []
