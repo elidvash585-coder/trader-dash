@@ -1,0 +1,195 @@
+{
+ "version": "v2",
+ "generated": "2026-11-07 21:16 UTC",
+ "stocks": 87,
+ "from": "2017-11-07",
+ "to": "2026-10-23",
+ "test_from": "2025-04-03",
+ "trade": {
+  "stop": "atr",
+  "k": 1.0,
+  "tgt": 3.0,
+  "hz": 10,
+  "cost": 0.001,
+  "slippage_side": 0.0005,
+  "entry": "next open"
+ },
+ "base_R": 0.038,
+ "base_profit": 37.0,
+ "base_target": 14.8,
+ "n": 187701,
+ "buckets": {
+  "<20": {
+   "n": 417,
+   "n_eff": 164,
+   "exp_R": 0.21,
+   "edge": 0.171,
+   "edge_ci": [
+    -0.031,
+    0.383
+   ],
+   "val_edge": 0.14,
+   "test_edge": 0.33,
+   "val_n": 347,
+   "test_n": 70,
+   "profit": 44.8,
+   "target": 15.1,
+   "stop": 50.4,
+   "gap_loss": 11.0,
+   "worst_R": -7.23
+  },
+  "20-25": {
+   "n": 1504,
+   "n_eff": 608,
+   "exp_R": 0.169,
+   "edge": 0.131,
+   "edge_ci": [
+    -0.017,
+    0.293
+   ],
+   "val_edge": 0.078,
+   "test_edge": 0.391,
+   "val_n": 1247,
+   "test_n": 257,
+   "profit": 41.0,
+   "target": 16.8,
+   "stop": 54.9,
+   "gap_loss": 9.3,
+   "worst_R": -7.06
+  },
+  "25-30": {
+   "n": 4255,
+   "n_eff": 1552,
+   "exp_R": 0.097,
+   "edge": 0.059,
+   "edge_ci": [
+    -0.039,
+    0.174
+   ],
+   "val_edge": 0.062,
+   "test_edge": 0.045,
+   "val_n": 3453,
+   "test_n": 802,
+   "profit": 39.7,
+   "target": 14.4,
+   "stop": 56.2,
+   "gap_loss": 9.4,
+   "worst_R": -7.29
+  },
+  "30-35": {
+   "n": 9274,
+   "n_eff": 3142,
+   "exp_R": 0.102,
+   "edge": 0.064,
+   "edge_ci": [
+    -0.009,
+    0.142
+   ],
+   "val_edge": 0.066,
+   "test_edge": 0.054,
+   "val_n": 7483,
+   "test_n": 1791,
+   "profit": 39.9,
+   "target": 14.2,
+   "stop": 56.1,
+   "gap_loss": 7.7,
+   "worst_R": -6.77
+  },
+  "35-40": {
+   "n": 15553,
+   "n_eff": 4994,
+   "exp_R": 0.068,
+   "edge": 0.03,
+   "edge_ci": [
+    -0.025,
+    0.087
+   ],
+   "val_edge": 0.031,
+   "test_edge": 0.027,
+   "val_n": 12623,
+   "test_n": 2930,
+   "profit": 38.1,
+   "target": 14.5,
+   "stop": 57.7,
+   "gap_loss": 7.7,
+   "worst_R": -7.78
+  },
+  "40-50": {
+   "n": 49669,
+   "n_eff": 9740,
+   "exp_R": 0.042,
+   "edge": 0.004,
+   "edge_ci": [
+    -0.027,
+    0.038
+   ],
+   "val_edge": -0.0,
+   "test_edge": 0.02,
+   "val_n": 39976,
+   "test_n": 9693,
+   "profit": 37.1,
+   "target": 14.7,
+   "stop": 58.7,
+   "gap_loss": 7.8,
+   "worst_R": -9.8
+  },
+  "50-60": {
+   "n": 55573,
+   "n_eff": 10743,
+   "exp_R": 0.037,
+   "edge": -0.001,
+   "edge_ci": [
+    -0.026,
+    0.023
+   ],
+   "val_edge": 0.001,
+   "test_edge": -0.006,
+   "val_n": 45738,
+   "test_n": 9835,
+   "profit": 36.7,
+   "target": 14.8,
+   "stop": 59.3,
+   "gap_loss": 8.0,
+   "worst_R": -10.7
+  },
+  "60-70": {
+   "n": 37327,
+   "n_eff": 7409,
+   "exp_R": 0.007,
+   "edge": -0.031,
+   "edge_ci": [
+    -0.071,
+    0.011
+   ],
+   "val_edge": -0.022,
+   "test_edge": -0.077,
+   "val_n": 31051,
+   "test_n": 6276,
+   "profit": 36.2,
+   "target": 14.7,
+   "stop": 59.9,
+   "gap_loss": 8.4,
+   "worst_R": -11.13
+  },
+  ">70": {
+   "n": 14129,
+   "n_eff": 2952,
+   "exp_R": -0.003,
+   "edge": -0.041,
+   "edge_ci": [
+    -0.125,
+    0.036
+   ],
+   "val_edge": -0.05,
+   "test_edge": 0.001,
+   "val_n": 11696,
+   "test_n": 2433,
+   "profit": 35.0,
+   "target": 16.0,
+   "stop": 61.6,
+   "gap_loss": 8.9,
+   "worst_R": -10.95
+  }
+ },
+ "excluded": "crypto, leveraged and inverse ETFs (not in the research universe)"
+}
