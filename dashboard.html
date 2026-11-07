@@ -86,6 +86,8 @@ input:focus{border-color:var(--acc)}
 .dec.go .v b{color:var(--up)}.dec.wait .v b{color:var(--warn)}.dec.no .v b{color:var(--mute)}
 .dec p{margin:10px 0 0;line-height:1.55;color:#d6dceb}
 .chk{list-style:none;margin:0;padding:0;display:grid;gap:7px}
+details.adv summary{cursor:pointer;list-style:none}details.adv summary::-webkit-details-marker{display:none}details.adv summary h4:after{content:" ▾";color:var(--dim)}details.adv[open] summary h4:after{content:" ▴"}
+.rst td{padding:3px 4px;border-bottom:1px solid rgba(35,43,58,.6)}
 .chk li{display:grid;grid-template-columns:20px 1fr;gap:6px;align-items:start;font-size:12.5px}
 .chk li i{font-style:normal;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:800;margin-top:1px}
 .chk li.ok i{background:rgba(38,201,154,.18);color:var(--up)}.chk li.bad i{background:rgba(240,80,110,.18);color:var(--down)}
@@ -113,6 +115,11 @@ input:focus{border-color:var(--acc)}
 .card h3{margin:0 0 12px;font-size:13.5px;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:8px}
 .c4{grid-column:span 4}.c5{grid-column:span 5}.c6{grid-column:span 6}.c7{grid-column:span 7}.c8{grid-column:span 8}.c12{grid-column:span 12}
 @media(max-width:1300px){.c4,.c5,.c6,.c7,.c8{grid-column:span 12}.main{grid-template-columns:300px minmax(0,1fr) 260px}}
+@media(max-width:820px){.top{flex-wrap:wrap;height:auto;row-gap:6px;padding-top:8px;padding-bottom:8px}.top .src{font-size:11.5px}
+ .main{grid-template-columns:minmax(0,1fr);height:auto;min-height:0}.main>.wl{order:1;max-height:46vh;border-right:0;border-bottom:1px solid var(--line)}
+ .main>.center{order:2;height:78vh;min-height:520px}.main>.info{order:3;border-left:0;overflow:visible}
+ .bottom{padding:10px;gap:10px}.bottom>*{grid-column:span 12!important}.bottom [style*="grid-template-columns:minmax(0,1fr) minmax(0,1fr)"]{grid-template-columns:minmax(0,1fr)!important}
+ body{overflow-x:hidden}}
 .insight{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:6px}
 .insight li{padding:7px 10px;border-radius:8px;background:var(--bg2);border-right:3px solid var(--c,var(--acc));font-size:12.5px;line-height:1.45}
 .grid4{display:grid;grid-template-columns:repeat(auto-fill,minmax(115px,1fr));gap:8px}
@@ -160,6 +167,7 @@ td.n{font-family:var(--mono);direction:ltr;text-align:left}
 <div class="top">
   <div class="logo"><i></i>Trader Dash</div>
   <span class="src"><span class="dot"></span>רשימת מעקב: <b id="srcName">-</b></span>
+  <span class="src" id="regime" style="opacity:.85"></span>
   <div class="sp"></div>
   <span class="src" id="clock"></span>
   <button class="static-hide" onclick="openCfg()">⚙ תקציב וסיכון</button>
@@ -201,7 +209,7 @@ td.n{font-family:var(--mono);direction:ltr;text-align:left}
 
 <script>
 const $=s=>document.querySelector(s);
-const state={rows:[],sel:null,data:null,range:'1Y',ind:'cci',sma:true,chan:true,filter:'all',sort:'list'};
+const state={rows:[],sel:null,data:null,range:'1Y',ind:'cci',sma:true,chan:true,avwap:false,vp:false,filter:'all',sort:'list'};
 const fmt=(x,d=2)=>x==null||isNaN(x)?'—':Number(x).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
 const pct=(x,d=2)=>x==null?'—':(x>0?'+':'')+fmt(x,d)+'%';
 const cls=x=>x==null||isNaN(x)?'':x>=0?'up':'down';
@@ -214,10 +222,10 @@ const inCol=v=>v==null?'var(--dim)':v>=6.5?'var(--up)':v>=5.5?'#9be3c7':v>=4.5?'
 const ring=(v,c)=>`<svg width="74" height="74" viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#232b3a" stroke-width="7"/><circle cx="32" cy="32" r="26" fill="none" stroke="${c}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${(v/10*163.4).toFixed(1)} 200" transform="rotate(-90 32 32)"/><text x="32" y="34" text-anchor="middle" fill="#e3e8f1" font-family="JetBrains Mono" font-size="17" font-weight="700">${fmt(v,1)}</text><text x="32" y="46" text-anchor="middle" fill="#8a94a8" font-family="JetBrains Mono" font-size="8">/10</text></svg>`;
 function indSec(d){const s=d.ind_score;if(!s)return '';const c=inCol(s.value);
   if(s.value==null)return `<div class="sec"><div class="dec" style="border-style:dashed"><div class="mute" style="font-size:12px">ציון 2: אינדיקטורים</div><b>N/A</b><p class="dim" style="font-size:11.5px;margin-top:6px">אין מספיק נתונים לחישוב (${Math.round((s.coverage||0)*100)}% מהמשקל). חסר: ${(s.missing||[]).join(', ')}.</p></div></div>`;
-  return `<div class="sec"><div class="dec" style="border-color:${c};border-style:dashed;background:linear-gradient(135deg,color-mix(in srgb,${c} 12%,transparent),transparent)"><div class="v"><div><div class="mute" style="font-size:12px">ציון 2: אינדיקטורים (לא נבדק)</div><b style="color:${c}">${s.label}</b></div>${ring(s.value,c)}</div>
+  return `<div class="sec"><div class="dec" style="border-color:${c};border-style:dashed;background:linear-gradient(135deg,color-mix(in srgb,${c} 12%,transparent),transparent)"><div class="v"><div><div class="mute" style="font-size:12px">ציון 2: אינדיקטורים (תיאור תנאים)</div><b style="color:${c}">${s.label}</b></div>${ring(s.value,c)}</div>
    <div style="margin-top:10px;display:flex;flex-direction:column;gap:7px">${s.components.map(k=>`<div title="${k.why}"><div style="display:flex;justify-content:space-between;font-size:12px"><span>${k.name}${k.weight?` <small class="dim">${k.weight}%</small>`:''}</span><b class="num" style="color:${inCol(k.value)}">${k.value==null?'—':fmt(k.value,1)}</b></div>
      <div style="height:5px;background:#232b3a;border-radius:3px;margin-top:3px"><div style="height:5px;border-radius:3px;width:${(k.value||0)*10}%;background:${inCol(k.value)}"></div></div><small class="dim" style="font-size:10.5px">${k.why}</small></div>`).join('')}</div>
-   <p class="dim" style="font-size:11px;margin-top:8px">${s.version==='v2'?`ממוצע משוקלל של ${s.n} משפחות (משקלים התחלתיים מקובץ ההגדרות, לא תוצאת מחקר). אינדיקטורים חופפים נספרים פעם אחת, ונתון חסר לא נספר כאפס.`:`ממוצע פשוט של ${s.n} רכיבים, משקל שווה.`} 5 = ניטרלי. זה תיאור של התנאים, לא הסתברות לרווח.</p></div></div>`}
+   <p class="dim" style="font-size:11px;margin-top:8px">${s.version==='v2'?`ממוצע משוקלל של ${s.n} משפחות (משקלים התחלתיים מקובץ ההגדרות, לא תוצאת מחקר). אינדיקטורים חופפים נספרים פעם אחת, ונתון חסר לא נספר כאפס.`:`ממוצע פשוט של ${s.n} רכיבים, משקל שווה.`} 5 = ניטרלי. זה תיאור של התנאים, לא הסתברות לרווח: במחקר על 10 שנים הוא לא ניבא את תוצאת העסקה.</p></div></div>`}
 const scCol=v=>v==null?'var(--dim)':v>=7?'var(--up)':v>=5.6?'#9be3c7':v>=4.4?'var(--warn)':'var(--down)';
 const STATIC=!!window.STATIC_SITE;let IDX=null;if(STATIC)document.documentElement.classList.add('static');
 async function loadIdx(force){if(!IDX||force){const r=await fetch('data/index.json?t='+Date.now());IDX=await r.json()}return IDX}
@@ -260,7 +268,7 @@ function renderWL(){
     if(r.error)return `<div class="wr ${sel}" onclick="select('${r.symbol}')"><div class="s"><b>${r.symbol}</b><small class="warn">אין נתונים</small></div><div class="p dim">—</div><div class="rec ld">—</div><div class="rec ld">—</div>${x}</div>`;
     return `<div class="wr ${sel}" onclick="select('${r.symbol}')"><div class="s"><b>${r.symbol}</b>${r.congress?`<span class="badge" title="עסקאות חברי קונגרס ב-90 יום">🏛 ${r.congress}</span>`:''}<small>${r.name||('תעלה '+r.channel)}</small></div>
       <div class="p">${fmt(r.price)}<small class="${cls(r.change_1d)}">${pct(r.change_1d)}</small>${r.ext?`<span class="extc ${r.ext.gap?'gap':''}" title="${r.ext.session==='pre'?'Pre-market':'After-hours'} ${fmt(r.ext.price)}">${r.ext.gap?'⚡':''}${r.ext.session==='pre'?'PM':'AH'} ${pct(r.ext.change,1)}</span>`:''}</div>
-      <div class="rec" style="color:${scCol(r.score)};border-color:${scCol(r.score)};font-family:var(--mono);font-size:13px" title="${r.score_label||''}${r.p_profit!=null?' · '+fmt(r.p_profit,0)+'% ברווח בהיסטוריה':''}">${r.score!=null?fmt(r.score,1):'—'}</div>
+      <div class="rec" style="color:${scCol(r.score)};border-color:${scCol(r.score)};font-family:var(--mono);font-size:13px" title="${r.score_label||'N/A'}${r.act?' · '+r.act:''}${r.p_profit!=null?' · '+fmt(r.p_profit,0)+'% ברווח בהיסטוריה':''}">${r.score!=null?fmt(r.score,1):'—'}</div>
       <div class="rec" style="color:${inCol(r.ind)};border-color:${inCol(r.ind)};border-style:dashed;font-family:var(--mono);font-size:13px" title="ציון אינדיקטורים (לא נבדק)">${r.ind!=null?fmt(r.ind,1):'—'}</div>${x}</div>`}).join('');
   $('#wlsum').innerHTML=`<span><b class="up">${cnt.go}</b> ציון 7+ · <b style="color:#9be3c7">${cnt.wait}</b> חיובי קל · <b class="dim">${cnt.no}</b> מתחת</span><span>${state.rows.some(r=>r.loading)?'טוען...':''}</span>`}
 async function addSym(){const v=$('#addInp').value.trim().toUpperCase();if(!v)return;const wl=await api('/api/watchlist');if(!wl.symbols.includes(v))wl.symbols.push(v);await post('/api/watchlist',wl);$('#addInp').value='';state.sel=v;loadList()}
@@ -279,7 +287,7 @@ function renderHeader(){const d=state.data,t=d.tech,f=d.fund||{};const c=d.candl
   <span class="px">${fmt(t.price)}</span><span class="chg ${cls(t.change_1d)}">${pct(t.change_1d)}</span>${d.ext&&d.ext.active?`<span class="extpill">${d.ext.label} <b>${fmt(d.ext.price)}</b><span class="num ${cls(d.ext.change)}">${pct(d.ext.change)}</span></span>`:''}
   <span class="num dim" style="font-size:11.5px">O ${fmt(c[1])} H ${fmt(c[2])} L ${fmt(c[3])} · Vol ${big(c[5])}</span><span class="sp"></span>
   <div class="tb">${['3M','6M','1Y','2Y'].map(r=>`<button class="${state.range===r?'on':''}" onclick="state.range='${r}';renderHeader();drawChart();drawInd()">${r}</button>`).join('')}<span class="sep"></span>
-  <button class="${state.sma?'on':''}" onclick="state.sma=!state.sma;renderHeader();drawChart()">ממוצעים</button><button class="${state.chan?'on':''}" onclick="state.chan=!state.chan;renderHeader();drawChart()">תעלה</button></div>`;
+  <button class="${state.sma?'on':''}" onclick="state.sma=!state.sma;renderHeader();drawChart()">ממוצעים</button><button class="${state.chan?'on':''}" onclick="state.chan=!state.chan;renderHeader();drawChart()">תעלה</button>${(t.overlays||{}).avwap_low?`<button class="${state.avwap?'on':''}" title="VWAP מעוגן משפל מאושר ומהשיא השנתי (מנרות יומיים, קירוב)" onclick="state.avwap=!state.avwap;renderHeader();drawChart()">AVWAP</button>`:''}${(t.overlays||{}).vprofile?`<button class="${state.vp?'on':''}" title="פרופיל נפח משוער מנרות יומיים: POC ואזור הערך" onclick="state.vp=!state.vp;renderHeader();drawChart()">פרופיל ≈</button>`:''}</div>`;
   $('#indTabs').innerHTML=[['cci','CCI 20'],['rsi','RSI 14'],['macd','MACD'],['obv','OBV']].map(([k,l])=>`<button class="${state.ind===k?'on':''}" onclick="state.ind='${k}';renderHeader();drawInd()">${l}</button>`).join('')+`<span class="sep"></span><span class="num dim" style="font-size:11.5px">${state.ind==='cci'?'CCI '+fmt(t.cci,1):state.ind==='rsi'?'RSI '+fmt(t.rsi,1):state.ind==='macd'?'MACD '+fmt(t.macd,3)+' / '+fmt(t.macd_signal,3):''}</span>`}
 
 function meter(label,val,lo,hi,ticks,cl,txt){const x=Math.max(0,Math.min(100,((val||0)-lo)/(hi-lo)*100));
@@ -306,7 +314,17 @@ function renderInfo(){const d=state.data,t=d.tech,ch=t.channel,dc=d.decision,p=d
   const up=a.mean?(a.mean/t.price-1)*100:null;const dist=x=>pct((x/t.price-1)*100,1);const col=dc.code==='go'?'#26c99a':dc.code==='wait'?'#f5b041':'#5d6780';
   let h=(d.errors||[]).map(e=>`<div class="err">${e}</div>`).join('');
   const sc=d.score;
-  if(sc){const c=scCol(sc.value),ang=(sc.value/10*163.4).toFixed(1);
+  const rg=(d.market||{}).regime;if(rg&&rg.label)$('#regime').innerHTML=`שוק: <b style="color:${rg.code==='on'?'var(--up)':rg.code==='off'?'var(--down)':'var(--warn)'}">${rg.label}</b>`;$('#regime').title=rg&&rg.label?`נקודות ${rg.points}${d.market.vix?' · VIX '+d.market.vix:''} · SPY/QQQ מול ממוצעים 50/200`:'';
+  if(sc&&sc.version==='v2'){const c=sc.value==null?'var(--dim)':scCol(sc.value),dcol={go:'var(--up)',wait:'var(--warn)',watch:'var(--mute)',exposure:'var(--down)'}[dc.code]||'var(--mute)',m=sc.meta||{};
+  h+=`<div class="sec"><div class="dec" style="border-color:${c};background:linear-gradient(135deg,color-mix(in srgb,${c} 16%,transparent),transparent)"><div class="v"><div><div class="mute" style="font-size:12px">ציון 1: מההיסטוריה (נבדק לאחור)</div><b style="color:${c}">${sc.label}</b></div>
+     ${sc.value==null?'<b class="num" style="font-size:22px;color:var(--dim)">N/A</b>':ring(sc.value,c)}</div>
+     ${dc.verdict?`<div style="margin-top:9px;padding:7px 10px;border-radius:8px;border-right:3px solid ${dcol};background:rgba(255,255,255,.03);font-size:12.5px;line-height:1.5"><b style="color:${dcol}">${dc.verdict}</b>${dc.strategy&&dc.strategy.key?` <span class="dim">· ${dc.strategy.name}</span>`:''}
+       ${dc.missing?`<div><span class="dim">חסר:</span> ${dc.missing}</div>`:''}${(dc.pros||[]).length?`<div><span class="up">בעד:</span> ${dc.pros.join('; ')}</div>`:''}${(dc.cons||[]).length?`<div><span class="down">נגד:</span> ${dc.cons.join('; ')}</div>`:''}${dc.change?`<div class="dim">${dc.change}</div>`:''}</div>`:''}
+     ${sc.value!=null?`<div class="kvs" style="margin-top:10px"><div><label>הסתיימו ברווח</label><b>${fmt(sc.p_profit,0)}%</b></div><div><label>הגיעו ליעד (3R)</label><b>${fmt(sc.p_target,0)}%</b></div></div>`:''}
+     <ul class="insight" style="margin:10px 0 0">${sc.reasons.map(([k,t])=>`<li style="--c:var(--${k})">${t}</li>`).join('')}</ul>
+     ${(dc.ext_alerts||[]).some(a=>a.level!=='info')?'<p class="warn" style="font-size:12px;margin-top:6px">⚠ יש התראת '+(d.ext.session==='pre'?'pre-market':'after-hours')+', ראה למטה.</p>':''}
+     ${sc.value!=null?`<p class="dim" style="font-size:11px;margin-top:8px">${m.stocks} מניות, ${m.from} עד ${m.to}, ${(sc.n||0).toLocaleString()} עסקאות (${(sc.n_eff||0).toLocaleString()} בלתי תלויות). תוחלת ${sc.exp_R>0?'+':''}${fmt(sc.exp_R)}R לעסקה, ${sc.significant?'מובהק':'לא מובהק'}, ${sc.stable?'נשמר מחוץ למדגם':'לא יציב מחוץ למדגם'}. כולל עלויות ${m.cost}. 5 = כמו כניסה ביום אקראי. זה לא ייעוץ.</p>`:''}</div></div>`+indSec(d);}
+  else if(sc){const c=scCol(sc.value),ang=(sc.value/10*163.4).toFixed(1);
   h+=`<div class="sec"><div class="dec" style="border-color:${c};background:linear-gradient(135deg,color-mix(in srgb,${c} 16%,transparent),transparent)"><div class="v"><div><div class="mute" style="font-size:12px">ציון 1: מההיסטוריה (נבדק לאחור)</div><b style="color:${c}">${sc.label}</b></div>
      <svg width="74" height="74" viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#232b3a" stroke-width="7"/><circle cx="32" cy="32" r="26" fill="none" stroke="${c}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${ang} 200" transform="rotate(-90 32 32)"/><text x="32" y="34" text-anchor="middle" fill="#e3e8f1" font-family="JetBrains Mono" font-size="17" font-weight="700">${fmt(sc.value,1)}</text><text x="32" y="46" text-anchor="middle" fill="#8a94a8" font-family="JetBrains Mono" font-size="8">/10</text></svg></div>
      <div class="kvs" style="margin-top:10px"><div><label>הסתיימו ברווח</label><b>${fmt(sc.p_profit,0)}%</b></div><div><label>הגיעו ליעד (3R)</label><b>${fmt(sc.p_target,0)}%</b></div></div>
@@ -321,7 +339,7 @@ function renderInfo(){const d=state.data,t=d.tech,ch=t.channel,dc=d.decision,p=d
      <p class="dim" style="font-size:11.5px;margin-top:8px">בבדיקה לאחור (${ev.test_n?ev.test_n.toLocaleString():'—'} עסקאות מ-${ev.test_from||''}): ${fmt(ev.test_win,0)}% הצלחה, ממוצע ${ev.test_R>0?'+':''}${fmt(ev.test_R)}R לעסקה, ${ev.test_edge>0?'+':''}${fmt(ev.test_edge)}R מעל קנייה ביום אקראי. התוצאה חיובית אבל לא מובהקת סטטיסטית.</p></div></div>`;
   }
   h+=`${extSec(d)}
-  <div class="sec"><h4>תיאור מצב <span class="dim" style="font-weight:400">בבדיקה לאחור הכללים האלה לא שיפרו תחזית</span></h4><ul class="chk">${dc.items.map(i=>`<li class="${i.ok===true?'ok':i.ok===false?'bad':'neu'}"><i>${i.ok===true?'✓':i.ok===false?'✕':'–'}</i><span>${i.label}<small>${i.detail}</small></span></li>`).join('')}</ul></div>
+  <div class="sec"><h4>${dc.version==='v2'?`תנאי כניסה <span class="dim" style="font-weight:400">${dc.items.filter(i=>i.ok===true).length} מתוך ${dc.items.length} מתקיימים${dc.unknown?`, ${dc.unknown} בלי מספיק נתונים`:''}</span>`:'תיאור מצב <span class="dim" style="font-weight:400">בבדיקה לאחור הכללים האלה לא שיפרו תחזית</span>'}</h4><ul class="chk">${dc.items.map(i=>`<li class="${i.ok===true?'ok':i.ok===false?'bad':'neu'}"><i title="${i.ok===null?'אין מספיק נתונים':''}">${i.ok===true?'✓':i.ok===false?'✕':'?'}</i><span>${i.label}<small>${i.detail}</small></span></li>`).join('')}</ul></div>
   ${tmSec(d)}
   <div class="sec"><h4>מגמה ותעלה</h4><div class="chan">${chanSvg(ch)}<div><b style="font-size:16px" class="${ch.kind==='עולה'?'up':ch.kind==='יורדת'?'down':'warn'}">תעלה ${ch.kind}</b>
      <div class="mute" style="margin-top:3px"><span class="num">${pct(ch.move_pct,1)}</span> ב-${ch.days} ימים · ${ch.where}</div><div class="dim" style="font-size:11.5px;margin-top:2px">גבולות: <span class="num">${fmt(ch.lower)} – ${fmt(ch.upper)}</span></div></div></div>
@@ -336,14 +354,35 @@ function renderInfo(){const d=state.data,t=d.tech,ch=t.channel,dc=d.decision,p=d
      ${meter('RSI 14',t.rsi,0,100,['0','30','50','70','100'],'rsi',rsiTxt(t.rsi))}
      <div class="kvs"><div><label>MACD מול אות</label><b class="${cls(t.macd-t.macd_signal)}">${fmt(t.macd,2)} / ${fmt(t.macd_signal,2)}</b></div><div><label>תנודתיות (ATR)</label><b>${fmt(t.atr)} · ${fmt(t.atr_pct,1)}%</b></div>
      <div><label>נפח יחסי היום</label><b class="${t.volume.rvol>=1.5?'warn':''}">x${fmt(t.volume.rvol)}</b></div><div><label>ציון טכני</label><b>${t.tech_score}/100</b></div></div></div>
-  ${p?`<div class="sec"><h4>תוכנית מסחר <span class="dim">${p.basis}</span></h4><div class="kvs">
+  ${planSec(d)}${!d.plan2&&p?`<div class="sec"><h4>תוכנית מסחר <span class="dim">${p.basis}</span></h4><div class="kvs">
      <div><label>כניסה בפתיחה (משוער)</label><b style="color:var(--acc)">${fmt(p.entry||p.trigger)}</b></div><div><label>סטופ</label><b class="down">${fmt(p.stop)}</b></div>
      <div><label>יעד (${p.rr}R)</label><b class="up">${fmt(p.target)}</b></div><div><label>מניות</label><b>${p.shares} · $${fmt(p.cost,0)}</b></div>
      <div><label>הפסד מקסימלי</label><b class="down">-$${fmt(p.max_loss,0)}</b></div><div><label>רווח ביעד</label><b class="up">+$${fmt(p.potential,0)}</b></div>
      <div style="grid-column:span 2"><label>יציאה בזמן</label><b style="font-family:Heebo">אחרי ${p.horizon||10} ימי מסחר, אם לא הגיע ליעד או לסטופ</b></div></div>
      ${p.active?'':'<div class="dim" style="font-size:11.5px;margin-top:6px">התוכנית מוצגת לעיון. המודל פועל רק כשהאות פעיל.</div>'}</div>`:''}
   ${a.mean?`<div class="sec"><h4>אנליסטים</h4><div class="kvs"><div><label>המלצה</label><b style="font-family:Heebo">${REC[a.key]||'—'}</b></div><div><label>יעד ממוצע</label><b>${fmt(a.mean)} <span class="${cls(up)}">${pct(up,0)}</span></b></div></div></div>`:''}`;
+  h+=advSec(d);
   $('#info').innerHTML=h}
+function planSec(d){const q=d.plan2;if(!q)return'';const sc=d.score||{},at=(d.tech.asset||{});
+  return `<div class="sec"><h4>תוכנית העסקה שנבדקה <span class="dim">כניסה בפתיחה, סטופ 1 ATR, 10 ימים</span></h4><div class="kvs">
+   <div><label>אזור כניסה</label><b style="color:var(--acc)">${fmt(q.entry_zone[0])}–${fmt(q.entry_zone[1])}</b></div><div><label>סטופ</label><b class="down">${fmt(q.stop)} <small class="dim">-${fmt(q.stop_pct,1)}% · 1 ATR</small></b></div>
+   <div><label>יעד 1 (התנגדות)</label><b class="up">${q.t1?fmt(q.t1):'—'}</b></div><div><label>יעד 2 (3R)</label><b class="up">${fmt(q.t2)}</b></div>
+   <div><label>סיכוי/סיכון ליעד הראשון</label><b class="${q.rr_t1>=2?'up':'warn'}">${fmt(q.rr_t1,1)}R</b></div><div><label>שפל מאושר אחרון</label><b>${q.swing_low?fmt(q.swing_low):'—'}</b></div>
+   <div style="grid-column:span 2"><label>ביטול הרעיון</label><b style="font-family:Heebo;font-size:12.5px">${q.invalidation}</b></div></div>
+   ${q.res_blocks?'<p class="warn" style="font-size:12px;margin-top:6px">התנגדות מאושרת קרובה מ-1R: אין עסקה איכותית כרגע.</p>':''}
+   <p class="dim" style="font-size:11px;margin-top:6px">הסטופ אינו הפסד מקסימלי: פער פתיחה יכול לעבור אותו${sc.gap_loss!=null?` (ב-${fmt(sc.gap_loss,0)}% מהסטופים במחקר ההפסד עבר 1.25R)`:''}.${at.type==='leveraged_etf'||at.type==='inverse_etf'?` מוצר ממונף יומי (x${at.leverage}): על פני כמה ימים התשואה אינה פשוט x${Math.abs(at.leverage)} מנכס הבסיס, ובתנודתיות היא נשחקת.`:''}</p></div>`}
+function advSec(d){const x=d.tech.fx||{},rg=(d.market||{}).regime||{},se=d.sector||{},dc=d.decision||{},st=dc.strategy||{},f=d.fund||{};
+  const rs=(b,n)=>{const v=b==='sector'?se['rs_sector_'+n]:x['rs_'+b+'_'+n];return v==null?'—':`<span class="${cls(v)}">${v>0?'+':''}${fmt(v,1)}%</span>`};
+  const S={2:'שיאים ושפלים עולים',0:'מעורב',[-2]:'שיאים ושפלים יורדים'};
+  return `<details class="sec adv"><summary><h4 style="display:inline">ניתוח מתקדם</h4></summary>
+   <div class="kvs" style="margin-top:8px"><div><label>מצב שוק</label><b style="font-family:Heebo">${rg.label||'—'}${d.market&&d.market.vix?` · VIX ${fmt(d.market.vix,1)}`:''}</b></div><div><label>סקטור</label><b style="font-family:Heebo">${se.sector_etf?se.sector_etf+(se.sector_he?' '+se.sector_he:'')+' · '+({1:'עולה',0:'מעורב','-1':'יורד'}[se.sector_trend]||'—'):'—'}</b></div>
+   <div style="grid-column:span 2"><label>סוג מצב</label><b style="font-family:Heebo;font-size:12.5px">${st.name||'—'}${st.evidence?` <span class="dim">(${st.evidence})</span>`:''}</b></div></div>
+   <table class="rst" style="width:100%;margin-top:8px;font-size:12px;border-collapse:collapse"><tr class="dim"><td>עוצמה יחסית</td><td>20 יום</td><td>60</td><td>120</td></tr>
+   ${[['spy','SPY'],['qqq','QQQ'],['sector',se.sector_etf||'סקטור']].map(([k,l])=>`<tr><td>${l}</td><td class="num">${rs(k,20)}</td><td class="num">${rs(k,60)}</td><td class="num">${rs(k,120)}</td></tr>`).join('')}</table>
+   <div class="kvs" style="margin-top:8px"><div><label>ADX (עוצמת מגמה)</label><b>${fmt(x.adx,0)} <small class="dim">${x.adx>=20?'מגמה':'דשדוש'}</small></b></div><div><label>מבנה</label><b style="font-family:Heebo;font-size:12px">${x.state!=null?S[x.state]:'—'}${x.failed_bo?' · פריצה שנכשלה':''}</b></div>
+   <div><label>ATR% · אחוזון שנתי</label><b>${fmt(x.atr_pct,1)}% · ${fmt(x.atr_pctile,0)}</b></div><div><label>תנודתיות ממומשת 20 יום</label><b>${fmt(x.rv20,0)}%</b></div>
+   ${f.peg!=null||f.fwd_pe!=null?`<div><label>PEG · מכפיל עתידי</label><b>${fmt(f.peg,1)} · ${fmt(f.fwd_pe,1)}</b></div>`:''}${f.op_margin!=null?`<div><label>שולי תפעול · FCF</label><b>${pct(f.op_margin*100,0)} · ${f.fcf!=null&&f.revenue?pct(f.fcf/f.revenue*100,0):'—'}</b></div>`:''}</div>
+   <p class="dim" style="font-size:11px;margin-top:8px">${x.bar_partial_excluded?'הנר של היום עוד בתהליך ולא נכלל בחישובים. ':''}מחקר מלא: <a href="https://github.com/elidvash585-coder/trader-dash/blob/main/research/REPORT4.md" target="_blank" rel="noopener" style="color:var(--acc)">REPORT4</a>. ערכים מחושבים מנרות יומיים סגורים.</p></details>`}
 
 /* ---------- bottom ---------- */
 function volProfile(v,price){const rows=v.profile.slice().reverse(),mx=Math.max(...rows.map(x=>x.vol))||1,H=rows.length*11;
@@ -381,15 +420,15 @@ function secInsights(q){const L=[];if(!q||!q.length)return L;const c=q[0],p=q[1]
   if(q.length>=3&&q[0].revenue_yoy!=null&&q[1].revenue_yoy!=null&&q[2].revenue_yoy!=null){const acc=q[0].revenue_yoy>q[1].revenue_yoy&&q[1].revenue_yoy>q[2].revenue_yoy,dec=q[0].revenue_yoy<q[1].revenue_yoy&&q[1].revenue_yoy<q[2].revenue_yoy;
     if(acc)L.push(['up','הצמיחה מאיצה: שלושה רבעונים ברצף של צמיחה שנתית גבוהה יותר.']);if(dec)L.push(['warn','הצמיחה מאטה: שלושה רבעונים ברצף של צמיחה שנתית נמוכה יותר.'])}
   return L}
-function validCard(d){const ev=(d.decision||{}).evidence;if(!ev)return'';const mx=Math.max(...ev.setups.map(x=>Math.abs(x[1])))||1;
-  return `<div class="card c12"><h3>תוקף המודל: בדיקה לאחור <span class="mute" style="font-size:11.5px;font-weight:400">${ev.stocks} מניות, ${ev.period}, עלויות 0.1% לעסקה</span></h3>
+function validCard(d){const ev=(d.decision_v1||d.decision||{}).evidence;if(!ev)return'';const m=((d.score||{}).meta)||null;const mx=Math.max(...ev.setups.map(x=>Math.abs(x[1])))||1;
+  return `<div class="card c12"><h3>תוקף המודל: בדיקה לאחור <span class="mute" style="font-size:11.5px;font-weight:400">${m?`מחקר v2: ${m.stocks} מניות, ${m.from} עד ${m.to} · מחקר קודם: `:''}${ev.stocks} מניות, ${ev.period}</span></h3>
    <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px">
    <div><div class="mute" style="font-size:12px;margin-bottom:8px">יתרון מעל קנייה ביום אקראי, בתקופת הבדיקה (R לעסקה)</div>
    ${ev.setups.map(([n,v])=>`<div style="display:grid;grid-template-columns:170px 1fr 56px;gap:8px;align-items:center;margin-bottom:6px;font-size:12.5px"><span>${n}</span><div style="position:relative;height:12px;background:var(--bg2);border-radius:6px;direction:ltr"><div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--line2)"></div><div style="position:absolute;top:1px;height:10px;border-radius:5px;${v>=0?'left:50%':'right:50%'};width:${(Math.abs(v)/mx*50).toFixed(1)}%;background:${v>0?'#26c99a':'#f0506e'}"></div></div><b class="num ${cls(v)}">${v>0?'+':''}${fmt(v,3)}</b></div>`).join('')}</div>
    <div>${ins([['up',`מכירת יתר (RSI מתחת ל-30) הייתה ההגדרה היחידה שהיתרון שלה היה חיובי בכל שלוש התקופות (למידה ${ev.train_edge>0?'+':''}${fmt(ev.train_edge,3)}, אימות ${ev.val_edge>0?'+':''}${fmt(ev.val_edge,3)}, בדיקה ${ev.test_edge>0?'+':''}${fmt(ev.test_edge,3)}), ובכל ${ev.variants_positive} הווריאציות של סטופ, יעד ומשך.`],
      ['down',`פריצות, כמו התוכנית הקודמת באתר, לא היו טובות מקנייה אקראית: ${ev.breakout_variants_positive} וריאציות חיוביות בתקופת הבדיקה.`],
      ['warn',`מרווח הביטחון של היתרון (${fmt(ev.test_edge_ci[0],2)} עד ${fmt(ev.test_edge_ci[1],2)}R) כולל את האפס, כך שזו ראיה חלשה ולא הוכחה. אותות כאלה מגיעים בעיקר בירידות חדות בשוק.`],
-     ['acc',`רשימת הכללים בשילוב משקלים שנלמדו מהנתונים לא ניבאה טוב ממטבע (AUC ${fmt(ev.checklist_auc,3)}), ולכן היא מוצגת רק לתיאור מצב.`]])}</div></div></div>`}
+     ['acc',`רשימת הכללים בשילוב משקלים שנלמדו מהנתונים לא ניבאה טוב ממטבע (AUC ${fmt(ev.checklist_auc,3)}), ולכן היא מוצגת רק לתיאור מצב.`]].concat(m?[['warn',`מחקר v2 על 10 שנים (walk-forward, כולל החלקה): היתרון של מכירת יתר נשמר אבל קטן בהרבה מבמחקר הקודם, פריצות במגמה היו שליליות, ו-12 משתנים נוספים (עוצמה יחסית, ADX, מבנה, נפחים, VIX, מצב שוק) לא שיפרו את התחזית. ציון 1 מחושב מהמחקר הזה.`]]:[]))}</div></div></div>`}
 function secCard(d){const s=d.sec;
   if(!s)return `<div class="card c6"><h3>דוחות רשמיים (SEC)</h3><div class="mute">${d.fund&&d.fund.name&&!/ETF|Trust|USD/.test(d.fund.name||'')?'נתוני SEC עדיין לא הופעלו (צריך שם ואימייל לבקשות ל-SEC).':'אין דוחות SEC לנכס הזה (קרן סל, קריפטו או חברה זרה).'}</div></div>`;
   const q=s.quarters||[];
@@ -449,6 +488,9 @@ function drawChart(){const d=state.data;if(!d)return;const el=$('#chart');if(mai
   vol.setData(d.candles.filter(x=>x[0]>=cut).map(x=>({time:x[0],value:x[5],color:x[4]>=x[1]?'rgba(38,201,154,.3)':'rgba(240,80,110,.3)'})));
   if(state.sma)[['sma20','#f5b041'],['sma50','#3d7bfd'],['sma200','#8c63ff']].forEach(([k,c])=>mainC.addLineSeries({color:c,lineWidth:1.5,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false}).setData(F(s[k])));
   if(state.chan){const L=t.channel.lines;[['upper',0],['mid',2],['lower',0]].forEach(([k,st])=>mainC.addLineSeries({color:'rgba(51,198,240,.85)',lineWidth:k==='mid'?1:2,lineStyle:st,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false}).setData(L[k].map(x=>({time:x[0],value:x[1]}))))}
+  const ov=t.overlays||{};
+  if(state.avwap)[['avwap_low','#e9a23b','AVWAP שפל'],['avwap_high','#c77dff','AVWAP שיא']].forEach(([k,c])=>{if(ov[k])mainC.addLineSeries({color:c,lineWidth:1.5,lineStyle:0,priceLineVisible:false,lastValueVisible:true,title:'',crosshairMarkerVisible:false}).setData(F(ov[k].series))});
+  if(state.vp&&ov.vprofile){const v=ov.vprofile;[[v.poc,'≈POC','#f5b041',0],[v.va_high,'≈VAH','rgba(245,176,65,.6)',2],[v.va_low,'≈VAL','rgba(245,176,65,.6)',2]].forEach(([pr,ti,co,ls])=>cs.createPriceLine({price:pr,color:co,lineWidth:1,lineStyle:ls,title:ti}))}
   t.support.forEach((x,i)=>cs.createPriceLine({price:x.price,color:'rgba(38,201,154,.55)',lineWidth:1,lineStyle:2,title:'S'+(i+1)}));
   t.resistance.forEach((x,i)=>cs.createPriceLine({price:x.price,color:'rgba(240,80,110,.55)',lineWidth:1,lineStyle:2,title:'R'+(i+1)}));
   if(d.plan)cs.createPriceLine({price:d.plan.trigger,color:'#3d7bfd',lineWidth:1,title:'Entry'});

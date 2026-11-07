@@ -9,6 +9,7 @@ Rules that keep it honest:
   (price-based families only: fundamentals are not available point-in-time from Yahoo).
 """
 import json
+import math
 import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -45,17 +46,15 @@ def fam_trend(x):
     if all(x.get(k) is not None for k in keys):
         p = x["price"]
         pts = sum([p > x["sma20"], p > x["sma50"], p > x["sma150"], p > x["sma200"], x["sma50"] > x["sma200"], x["slope50"] > 0])
-        clusters.append(pts / 6 * 10)
-        why.append("ממוצעים: %d מתוך 6 חיוביים" % pts)
-    if x.get("adx") is not None and x.get("pdi") is not None:
-        a = x["adx"]
-        if a < 20:
-            clusters.append(5.0)
-            why.append("ADX %.0f: אין מגמה ברורה" % a)
+        v = pts / 6 * 10
+        # ADX (trend STRENGTH, not direction) only scales how far the MA picture moves the score from 5.
+        # Research v2: +DI/-DI direction was 0.94 correlated with RSI, so it is not counted again.
+        if x.get("adx") is not None:
+            v = 5 + (v - 5) * min(1.0, x["adx"] / 25.0)
+            why.append("ממוצעים: %d מתוך 6 חיוביים, ADX %.0f (%s)" % (pts, x["adx"], "מגמה ברורה" if x["adx"] >= 20 else "מגמה חלשה"))
         else:
-            d = 1 if x["pdi"] > x["ndi"] else -1
-            clusters.append(5 + d * min(a - 20, 20) / 20 * 4)
-            why.append("ADX %.0f, כיוון %s" % (a, "עולה" if d > 0 else "יורד"))
+            why.append("ממוצעים: %d מתוך 6 חיוביים" % pts)
+        clusters.append(v)
     if x.get("state") is not None:
         v = {2: 8.0, 0: 5.0, -2: 2.0}[x["state"]]
         if x.get("failed_bo"):
@@ -92,6 +91,9 @@ def fam_momentum(x):
             why.append("מול SPY: %+.1f%% ב-60 יום%s" % (vals[1], trend))
     if rs:
         clusters.append(sum(rs) / len(rs))
+    # research v2: oscillators are 0.75 correlated with the trend family -> half weight inside the family
+    if len(clusters) == 2:
+        return (0.5 * clusters[0] + clusters[1]) / 1.5, why
     return _mean(clusters), why
 
 
@@ -170,10 +172,9 @@ def fam_entry(x, tm=None):
             clusters.append(8.0 if room >= 3 else 7.0 if room >= 2 else 5.0 if room >= 1 else 2.5)
             why.append("התנגדות במרחק %.1f ATR" % room)
     e = x.get("ext_atr")
-    if e is not None:
-        clusters.append(2.5 if e > 3 else 4.5 if e > 2 else 6.5 if e >= -1 else 5.0)
-        if e > 2:
-            why.append("מתוח %.1f ATR מעל ממוצע 20" % e)
+    if e is not None and e > 3:  # only the extreme: the full range is 0.95 correlated with RSI
+        clusters.append(3.0)
+        why.append("מתוח %.1f ATR מעל ממוצע 20" % e)
     if x.get("atr_pctile") is not None and x["atr_pctile"] > 90:
         clusters.append(3.5)
         why.append("תנודתיות חריגה (אחוזון %.0f)" % x["atr_pctile"])
@@ -231,3 +232,227 @@ def _lvl(m, zero, good):
     if m <= zero:
         return cl(4 + m / max(good, 1e-9) * 4, 1.5, 4)  # losses lower the cluster but never to 0
     return cl(5 + (m - zero) / (good - zero) * 3, 5, 9)
+
+
+# ================================================================ historical score v2
+RSI_BINS = [(0, 20, "<20"), (20, 25, "20-25"), (25, 30, "25-30"), (30, 35, "30-35"), (35, 40, "35-40"),
+            (40, 50, "40-50"), (50, 60, "50-60"), (60, 70, "60-70"), (70, 101, ">70")]
+NOT_COVERED = {"crypto": "קריפטו", "leveraged_etf": "תעודת סל ממונפת", "inverse_etf": "תעודת סל הפוכה"}
+
+
+def load_table():
+    try:
+        with open(os.path.join(HERE, "research", "score_table_v2.json"), encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception:
+        return None
+
+
+TABLE = load_table()
+
+
+def _bucket_row(tab, lab, min_n_eff):
+    rows = tab["buckets"]
+    r = rows.get(lab)
+    if lab == "<20" and (not r or r.get("n_eff", 0) < min_n_eff):  # too few alone: pool with 20-25
+        a, b = rows.get("<20") or {}, rows.get("20-25") or {}
+        if "edge" in b:
+            n = a.get("n", 0) + b["n"]
+            w = lambda k: ((a.get(k) or 0) * a.get("n", 0) + b[k] * b["n"]) / n
+            r = dict(b, n=n, n_eff=a.get("n_eff", 0) + b["n_eff"], edge=round(w("edge"), 3), exp_R=round(w("exp_R"), 3),
+                     profit=round(w("profit"), 1), target=round(w("target"), 1), label="<25")
+    return r
+
+
+def hist_score(rsi, asset=None, blockers=None, tab=None, cfg=None):
+    """0-10 from the 10-year research table. 5 = like entering on a random day.
+    score = 5 + 4.5 * shrunk_edge / span_R, shrunk_edge = edge * n_eff / (n_eff + k);
+    capped at 6.4 when the CI of the edge includes 0, at 5.5 when validation and test disagree in sign,
+    at 5.0 by blockers (earnings inside the trade, fresh material filing, pre-market under the stop).
+    N/A for assets outside the research universe or a group with too few independent trades."""
+    tab = tab or TABLE
+    c = (cfg or CFG).get("historical_score", {})
+    k, span, min_n = c.get("shrink_k", 500), c.get("span_R", 0.30), c.get("min_n_eff", 100)
+    base = {"value": None, "label": "N/A", "code": "na", "reasons": [], "version": "v2"}
+    if not tab:
+        base["reasons"].append(("warn", "טבלת המחקר לא זמינה."))
+        return base
+    at = (asset or {}).get("type")
+    if at in NOT_COVERED:
+        base["reasons"].append(("warn", "%s לא נכללה במחקר (רק מניות ותעודות סל רגילות), לכן אין ציון היסטורי." % NOT_COVERED[at]))
+        return base
+    if rsi is None:
+        base["reasons"].append(("warn", "אין RSI."))
+        return base
+    lab = next(l for lo, hi, l in RSI_BINS if lo <= rsi < hi)
+    r = _bucket_row(tab, lab, min_n)
+    if not r or "edge" not in r or r.get("n_eff", 0) < min_n:
+        base["reasons"].append(("warn", "מעט מדי עסקאות בלתי תלויות בטווח הזה (פחות מ-%d)." % min_n))
+        return base
+    shr = r["edge"] * r["n_eff"] / (r["n_eff"] + k)
+    val = max(0.5, min(9.5, 5 + 4.5 * shr / span))
+    lo, hi = r.get("edge_ci") or [None, None]
+    sig = lo is not None and (lo > 0 or hi < 0)
+    caps = []
+    if not sig and val > c.get("cap_if_ci_has_zero", 6.4):
+        val = c.get("cap_if_ci_has_zero", 6.4)
+        caps.append("רווח הסמך כולל אפס")
+    ve, te = r.get("val_edge"), r.get("test_edge")
+    stable = ve is not None and te is not None and (ve > 0) == (te > 0) == (r["edge"] > 0)
+    if ve is not None and te is not None and not stable and val > c.get("cap_if_recent_opposite", 5.5):
+        val = c.get("cap_if_recent_opposite", 5.5)
+        caps.append("הכיוון לא נשמר בין התקופות")
+    bl = [b for b in (blockers or []) if b]
+    if bl and val > c.get("cap_if_blocked", 5.0):
+        val = c.get("cap_if_blocked", 5.0)
+    val = round(val, 1)
+    reasons = [("up" if r["edge"] > 0 else "down" if r["edge"] < 0 else "acc",
+                "RSI %.0f (טווח %s). באותה עסקה בעבר: %.0f%% ברווח, %.0f%% הגיעו ליעד, ממוצע %+.2fR (יום אקראי: %+.2fR)." % (
+                    rsi, r.get("label", lab), r["profit"], r["target"], r["exp_R"], tab["base_R"])),
+               ("acc", "יתרון מול יום אקראי %+.2fR, רווח סמך %s%s. %s עסקאות (%s בלתי תלויות)." % (
+                   r["edge"], "[%+.2f, %+.2f]" % (lo, hi) if lo is not None else "—", " (מובהק)" if sig else " (לא מובהק)",
+                   format(r["n"], ","), format(r["n_eff"], ",")))]
+    if ve is not None and te is not None:
+        reasons.append(("up" if stable else "warn", "מחוץ למדגם: עד %s %+.2fR, מאז %+.2fR%s." % (
+            tab["test_from"], ve, te, " (אותו כיוון)" if stable else " (לא יציב)")))
+    if caps:
+        reasons.append(("warn", "הציון הוגבל: " + ", ".join(caps) + "."))
+    if bl:
+        reasons.append(("warn", ("הציון הוגבל ל-5: " if val == c.get("cap_if_blocked", 5.0) else "שים לב: ") + "; ".join(bl) + "."))
+    label = ("שווה לשקול כניסה" if val >= 7 else "חיובי קל" if val >= 5.6 else
+             "ניטרלי, כמו כניסה אקראית" if val >= 4.4 else "לא כדאי עכשיו")
+    return {"value": val, "label": label, "code": "go" if val >= 7 else "wait" if val >= 5.6 else "no", "version": "v2",
+            "bucket": r.get("label", lab), "p_profit": r["profit"], "p_target": r["target"], "exp_R": r["exp_R"],
+            "edge": r["edge"], "edge_ci": [lo, hi], "significant": sig, "stable": stable, "n": r["n"], "n_eff": r["n_eff"],
+            "gap_loss": r.get("gap_loss"), "reasons": reasons, "capped": bool(caps or bl),
+            "meta": {"stocks": tab["stocks"], "from": tab["from"], "to": tab["to"], "test_from": tab["test_from"],
+                     "cost": "0.10% + החלקה 0.05% לכל צד"}}
+
+
+# ================================================================ trade plan and decision
+
+def plan_v2(x, cfg=None):
+    """The tested trade (MR-a: next open, stop 1 ATR, target 3R, 10 sessions) + a first target at the nearest
+    confirmed resistance when it sits between 1R and 3R. The stop is never moved to improve the R/R."""
+    p, a = x.get("price"), x.get("atr")
+    if not p or not a:
+        return None
+    entry = round(p, 2)
+    stop = math.floor((entry - a) * 100) / 100
+    risk = entry - stop
+    if risk <= 0:
+        return None
+    t2 = round(entry + 3 * risk, 2)
+    res = x.get("res")
+    t1 = round(res, 2) if res and entry + risk <= res < t2 else None
+    blocked_by_res = bool(res and res < entry + risk)
+    rr = ((t1 or t2) - entry) / risk
+    return {"entry": entry, "entry_zone": [round(entry - 0.25 * a, 2), round(entry + 0.1 * a, 2)], "stop": stop,
+            "stop_pct": round(risk / entry * 100, 2), "stop_atr": 1.0, "t1": t1, "t2": t2, "rr_t1": round(rr, 2),
+            "res": round(res, 2) if res else None, "res_r": round((res - entry) / risk, 2) if res else None,
+            "res_blocks": blocked_by_res, "swing_low": round(x["swing_low"], 2) if x.get("swing_low") else None,
+            "horizon": 10, "invalidation": "סגירה מתחת ל-%.2f, או 10 ימי מסחר בלי יעד" % stop}
+
+
+def strategy_of(x, fund=None, asset=None):
+    """Fixed order, decided before looking at any result: MR, then TF, then Quality Growth."""
+    if (asset or {}).get("type") in NOT_COVERED:
+        return {"key": None, "name": "מחוץ ליקום המחקר", "evidence": "לא נבדק לנכס מהסוג הזה"}
+    rsi = x.get("rsi")
+    if rsi is not None and rsi < 35:
+        return {"key": "MR", "name": "Mean Reversion (מכירת יתר)", "evidence": "נבדק: יתרון חיובי, לא מובהק ברוב הגרסאות"}
+    p = x.get("price")
+    ma = [p > x[k] for k in ("sma20", "sma50", "sma150", "sma200") if x.get(k)] if p else []
+    if ma and all(ma) and (x.get("rs_spy_60") or 0) > 0:
+        return {"key": "TF", "name": "Trend Following (מגמה)", "evidence": "נבדק: ללא יתרון, פריצות היו שליליות מול יום אקראי"}
+    f = fund or {}
+    if (f.get("rev_growth") or 0) > 0.10 and (f.get("op_margin") or 0) > 0:
+        return {"key": "QG", "name": "Quality Growth (צמיחה איכותית)", "evidence": "עוד לא נבדק לאחור (שלב 3)"}
+    return {"key": None, "name": "אין מצב מוגדר", "evidence": ""}
+
+
+def decide(x, hist, ind, plan, events=None, asset=None, fund=None, cfg=None):
+    """One verbal decision from fixed rules (no average of the two scores).
+    events: {"earnings_days": int|None, "earnings_known": bool, "sec_material": str|None, "sec_known": bool,
+             "premarket_below_stop": bool|None}"""
+    c = (cfg or CFG).get("decision", {})
+    ev = events or {}
+    hv = (hist or {}).get("value")
+    iv = (ind or {}).get("value")
+    st = strategy_of(x, fund, asset)
+    items = []
+
+    def item(label, ok, detail):
+        items.append({"label": label, "ok": ok, "detail": detail})
+    rsi = x.get("rsi")
+    item("מצב מכירת יתר שנבדק (RSI מתחת ל-35)", None if rsi is None else rsi < 35,
+         "RSI %.0f" % rsi if rsi is not None else "אין נתון")
+    item("יתרון היסטורי (ציון 1 לפחות %.1f)" % c.get("min_hist", 5.6), None if hv is None else hv >= c.get("min_hist", 5.6),
+         "ציון %.1f" % hv if hv is not None else "אין ציון היסטורי לנכס הזה")
+    if plan:
+        ok = not plan["res_blocks"] and plan["rr_t1"] >= c.get("min_rr", 2.0)
+        item("מקום עד ההתנגדות (סיכוי/סיכון לפחות %.0f)" % c.get("min_rr", 2.0), ok,
+             "התנגדות %.2f (%s)" % (plan["res"], "%.1fR" % plan["res_r"]) if plan["res"] else "אין התנגדות מאושרת מעל המחיר")
+    else:
+        item("מקום עד ההתנגדות", None, "אין נתונים לחישוב")
+    if ev.get("earnings_known"):
+        d = ev.get("earnings_days")
+        inside = d is not None and 0 <= d <= 14
+        item("אין דוח כספי בתוך תקופת העסקה", not inside, "דוח בעוד %d ימים" % d if d is not None and d >= 0 else "לא צפוי דוח קרוב")
+    else:
+        item("אין דוח כספי בתוך תקופת העסקה", None, "אין מועד דוח ידוע")
+    if ev.get("sec_known"):
+        item("אין דיווח מהותי טרי ל-SEC", not ev.get("sec_material"), ev.get("sec_material") or "אין ב-7 הימים האחרונים")
+    else:
+        item("אין דיווח מהותי טרי ל-SEC", None, "אין נתוני SEC לנכס הזה")
+    if ev.get("premarket_below_stop") is not None:
+        item("המחיר מחוץ לשעות המסחר לא מתחת לסטופ", not ev["premarket_below_stop"], "")
+    covered = (asset or {}).get("type") not in NOT_COVERED
+    item("הנכס בתוך יקום המחקר והנתונים תקינים", covered,
+         "מניה או תעודת סל רגילה" if covered else NOT_COVERED.get((asset or {}).get("type"), ""))
+    items = items[:7]
+
+    pros, cons = [], []
+    if hv is not None and hv >= c.get("min_hist", 5.6):
+        pros.append("בעבר, מצב RSI כזה נתן יתרון של %+.2fR מול יום אקראי" % hist["edge"])
+    elif hv is not None and hv < 4.4:
+        cons.append("בעבר, מצב RSI כזה היה חלש מיום אקראי (%+.2fR)" % hist["edge"])
+    if iv is not None and iv >= 6.5:
+        pros.append("התנאים הטכניים והפונדמנטליים חיוביים (ציון 2: %.1f), אבל זה לא נמצא מנבא במחקר" % iv)
+    elif iv is not None and iv < 4.5:
+        cons.append("התנאים הנוכחיים חלשים (ציון 2: %.1f)" % iv)
+    if x.get("regime") == "off":
+        cons.append("השוק ב-Risk-Off (במחקר זה לא פגע במכירת יתר, אבל פגע בפריצות)")
+    if st["key"] == "TF":
+        cons.append("מצב מגמה: במחקר, כניסה בפריצה לא נתנה יתרון")
+    failed = [i for i in items if i["ok"] is False]
+    unknown = [i for i in items if i["ok"] is None]
+
+    weak = (iv is not None and iv <= 3.5) or (x.get("state") == -2 and x.get("bos_dn"))
+    bad_event = any(i["ok"] is False for i in items if "SEC" in i["label"])
+    if hv is not None and not failed:
+        verdict, code = "כניסה אפשרית", "go"
+        missing = None
+        change = "ביטול: %s" % plan["invalidation"] if plan else ""
+    elif hv is not None and hv >= c.get("min_hist", 5.6):
+        verdict, code = "המתנה", "wait"
+        missing = failed[0]["label"] + (" (" + failed[0]["detail"] + ")" if failed[0]["detail"] else "")
+        change = "כניסה תהיה אפשרית כשהתנאי הזה יתקיים והציון ההיסטורי יישאר מעל %.1f" % c.get("min_hist", 5.6)
+    elif weak or bad_event:
+        verdict, code = "אם אתה מחזיק: בדוק חשיפה", "exposure"
+        missing = "התנאים הנוכחיים חלשים" if weak else "דיווח מהותי טרי"
+        change = "שיפור במבנה (שפל עולה מאושר) או ירידה למכירת יתר עמוקה"
+    elif iv is not None and iv >= 6.5:
+        verdict, code = "המתנה", "wait"
+        missing = "אין יתרון היסטורי מוכח בכניסה עכשיו (ציון 1 %s)" % ("%.1f" % hv if hv is not None else "N/A")
+        change = "ירידה לאזור מכירת יתר (RSI מתחת ל-35) בלי שבירת המגמה"
+    else:
+        verdict, code = "מעקב", "watch"
+        missing = "אין יתרון היסטורי מוכח (ציון 1 %s)" % ("%.1f" % hv if hv is not None else "N/A")
+        change = "ירידה לאזור מכירת יתר (RSI מתחת ל-35)"
+    for i in failed:
+        txt = i["label"] + (": " + i["detail"] if i["detail"] else "")
+        if not (missing and missing.startswith(i["label"])) and not i["label"].startswith("יתרון היסטורי"):
+            cons.append(txt)
+    return {"verdict": verdict, "code": code, "items": items, "pros": pros[:3], "cons": cons[:3], "missing": missing,
+            "change": change, "unknown": len(unknown), "strategy": st, "version": "v2"}

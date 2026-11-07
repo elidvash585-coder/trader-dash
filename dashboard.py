@@ -717,6 +717,45 @@ def sector_part(fund, t_last_bars):
         return None
 
 
+def events_for(fund, sec, ext, plan2):
+    """Facts only (earnings date, SEC filings, extended-hours price). Unknown stays unknown."""
+    ev = {"earnings_known": False, "earnings_days": None, "sec_known": sec is not None, "sec_material": None,
+          "premarket_below_stop": None}
+    blockers = []
+    if fund and fund.get("next_earnings"):
+        try:
+            d = (datetime.date.fromisoformat(fund["next_earnings"]) - datetime.date.today()).days
+            ev["earnings_known"], ev["earnings_days"] = True, d
+            if 0 <= d <= 14:
+                blockers.append("דוח כספי בעוד %d ימים, בתוך תקופת העסקה" % d)
+        except Exception:
+            pass
+    if sec:
+        rec = [f for f in sec.get("filings", []) if f.get("important")
+               and (datetime.date.today() - datetime.date.fromisoformat(f["date"])).days <= 7]
+        if rec:
+            ev["sec_material"] = "דיווח %s (%s)" % (rec[0]["date"], ", ".join(rec[0]["items_he"]))
+            blockers.append("דיווח מהותי טרי ל-SEC")
+    if ext and ext.get("active") and plan2 and ext.get("price") is not None:
+        ev["premarket_below_stop"] = ext["price"] <= plan2["stop"]
+        if ev["premarket_below_stop"]:
+            blockers.append("המחיר מחוץ לשעות המסחר כבר מתחת לסטופ")
+    return ev, blockers
+
+
+def engine_block(tech, fund, sec, ext, ind):
+    """Historical score v2, the tested plan and the decision, all from closed bars."""
+    x = dict(tech.get("fx") or {})
+    if not x:
+        return None, None, None
+    x.setdefault("rsi", tech.get("rsi"))
+    plan2 = EN.plan_v2(x)
+    ev, blockers = events_for(fund, sec, ext, plan2)
+    hist = EN.hist_score(x.get("rsi"), tech.get("asset"), blockers)
+    dec = EN.decide(x, hist, ind, plan2, ev, tech.get("asset"), fund)
+    return hist, plan2, dec
+
+
 def trade_plan(tech, cfg):
     """The backtested plan: enter at the next open (estimated by the last price), stop 1 ATR, target 3R, 10 days."""
     price, a = tech["price"], tech["atr"]
@@ -1005,6 +1044,11 @@ def analyze(sym, force=False):
     out["ind_score"] = ind_score(base["tech"], out["plan"], out["fund"], out["tm"], sector=out["sector"])
     if out["score"]:
         out["decision"]["code"] = out["score"]["code"]
+    hist, plan2, dec = engine_block(base["tech"], out["fund"], out["sec"], base.get("ext"), out["ind_score"])
+    if hist is not None:
+        out["score_v1"], out["score"], out["plan2"] = out["score"], hist, plan2
+        dec["ext_alerts"] = out["decision"].get("ext_alerts")
+        out["decision_v1"], out["decision"] = out["decision"], dec
     _full[sym] = (time.time(), out)
     return out
 
@@ -1041,13 +1085,17 @@ def quick(sym, force=False):
         isc = (full.get("ind_score") if full else None) or ind_score(t, pl, f if f else None, tm)
         if sc:
             dec["code"] = sc["code"]
+        if t.get("fx"):
+            hv, _, d2 = engine_block(t, f if f else None, full.get("sec"), a.get("ext"), isc)
+            sc = hv
+            dec = {"verdict": d2["verdict"], "code": hv["code"], "score": None}
         return {"symbol": sym, "price": t["price"], "change_1d": t["change_1d"], "change_1m": t["change_1m"],
                 "rsi": t["rsi"], "cci": t["cci"], "rvol": t["rvol"], "trend": t["trend"], "tech_score": t["tech_score"],
                 "verdict": label, "target_up": r2((an["mean"] / t["price"] - 1) * 100, 1) if an.get("mean") else None,
                 "spark": [x[4] for x in a["candles"][-60:]], "decision": dec["verdict"], "decision_code": dec["code"],
                 "decision_score": dec["score"], "channel": t["channel"]["kind"], "name": f.get("name"),
                 "tm": {"p_target": tm["p_target"], "lean": tm["lean"]} if tm else None,
-                "score": sc["value"] if sc else None, "score_label": sc["label"] if sc else None,
+                "score": sc["value"] if sc else None, "score_label": sc["label"] if sc else None, "act": dec["verdict"],
                 "p_profit": sc["p_profit"] if sc else None, "ind": isc["value"] if isc else None,
                 "ext": {k: (a.get("ext") or {}).get(k) for k in ("session", "active", "price", "change", "gap", "volume", "vol_pct")}
                 if (a.get("ext") or {}).get("active") else None}

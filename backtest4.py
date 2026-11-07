@@ -591,6 +591,39 @@ def strategies(trades):
     return out
 
 
+def score_table_v2(panel):
+    """The table the site's historical score reads: per RSI bucket, over the FULL period, with the
+    effective sample (overlapping trades in one stock counted once), a month-block CI of the edge,
+    and the validation / test edges separately so the site can tell whether the sign held."""
+    base = panel.R.mean()
+    tf = pd.Timestamp(TEST_FROM)
+    val, test = panel[panel.date < tf], panel[panel.date >= tf]
+    rows = {}
+    for b in LABELS:
+        d = panel[panel.bucket == b]
+        if len(d) < 30:
+            rows[b] = {"n": int(len(d))}
+            continue
+        dv, dt = val[val.bucket == b], test[test.bucket == b]
+        stops = d[d.kind.isin([2, 5])]
+        rows[b] = {"n": int(len(d)), "n_eff": n_eff(d[["sym", "date"]], 10),
+                   "exp_R": round(float(d.R.mean()), 3), "edge": round(float(d.R.mean() - base), 3), "edge_ci": edge_ci(d, panel),
+                   "val_edge": round(float(dv.R.mean() - val.R.mean()), 3) if len(dv) >= 30 else None,
+                   "test_edge": round(float(dt.R.mean() - test.R.mean()), 3) if len(dt) >= 30 else None,
+                   "val_n": int(len(dv)), "test_n": int(len(dt)),
+                   "profit": round(float((d.R > 0).mean() * 100), 1), "target": round(float((d.kind == 1).mean() * 100), 1),
+                   "stop": round(float(len(stops) / len(d) * 100), 1),
+                   "gap_loss": round(float((stops.R < -1.25).mean() * 100), 1) if len(stops) else None,
+                   "worst_R": round(float(d.R.min()), 2)}
+        print("bucket %-6s n %6d n_eff %5d edge %+.3f %s" % (b, rows[b]["n"], rows[b]["n_eff"], rows[b]["edge"], rows[b]["edge_ci"]), flush=True)
+    return {"version": "v2", "generated": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+            "stocks": int(panel.sym.nunique()), "from": str(panel.date.min().date()), "to": str(panel.date.max().date()),
+            "test_from": TEST_FROM, "trade": dict(MODEL_TRADE, cost=COST, slippage_side=SLIP, entry="next open"),
+            "base_R": round(float(base), 3), "base_profit": round(float((panel.R > 0).mean() * 100), 1),
+            "base_target": round(float((panel.kind == 1).mean() * 100), 1), "n": int(len(panel)), "buckets": rows,
+            "excluded": "crypto, leveraged and inverse ETFs (not in the research universe)"}
+
+
 def sensitivity(panel):
     """RSI<30 model trade edge across stop/target/horizon (all on the same signals), validation period."""
     return None  # computed in backtest2.py (32 variants); not repeated here
@@ -711,6 +744,11 @@ def main():
     for part, d in (("all", panel), ("val", panel[panel.date < TEST_FROM]), ("test", panel[panel.date >= TEST_FROM])):
         base = d.R.mean()
         res["rsi_table_10y"][part] = {b: {"n": int(len(g)), "edge": round(float(g.R.mean() - base), 3)} for b, g in d.groupby("bucket")}
+    st = score_table_v2(panel)
+    if not D.DEMO:
+        with open(os.path.join(OUT, "score_table_v2.json"), "w", encoding="utf-8") as fh:
+            json.dump(st, fh, ensure_ascii=False, indent=1)
+    res["score_table_v2"] = st
     with open(os.path.join(OUT, "model_v2.json"), "w", encoding="utf-8") as fh:
         json.dump(res, fh, ensure_ascii=False, indent=1, default=str)
     md = report(res)
