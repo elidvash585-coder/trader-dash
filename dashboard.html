@@ -70,7 +70,12 @@ input:focus{border-color:var(--acc)}
 .tb button.on{color:#fff;background:var(--panel2);border-color:var(--line2)}
 .tb .sep{width:1px;height:16px;background:var(--line2);margin:0 4px}
 .legend{display:flex;gap:12px;font-size:11px;color:var(--mute);direction:ltr;padding:6px 14px 0;flex-wrap:wrap}
-.legend span:before{content:"";display:inline-block;width:12px;height:3px;border-radius:2px;margin-right:4px;vertical-align:middle;background:var(--c)}
+.legend span:before{content:"";display:inline-block;width:12px;height:3px;border-radius:2px;margin-left:4px;vertical-align:middle;background:var(--c)}
+.legend{direction:rtl;align-items:center}.legend span{cursor:help}.legend span.dash:before{height:0;background:none;border-top:2px dashed var(--c)}
+.legend button{padding:1px 8px;font-size:11px;border-radius:999px;margin-inline-start:auto}
+.lghelp{margin:6px 14px 0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);font-size:11.5px;line-height:1.55;display:grid;gap:3px;max-height:190px;overflow:auto}
+.lghelp div:before{content:"";display:inline-block;width:12px;height:3px;border-radius:2px;margin-left:6px;vertical-align:middle;background:var(--c)}.lghelp div.dash:before{height:0;background:none;border-top:2px dashed var(--c)}
+.lghelp b{color:var(--text);font-weight:600}
 #chart{flex:1;min-height:260px;direction:ltr}
 .ind{height:170px;border-top:1px solid var(--line);display:flex;flex-direction:column}
 .ind .tb{padding:4px 10px;border-bottom:1px solid var(--line)}
@@ -178,7 +183,7 @@ td.n{font-family:var(--mono);direction:ltr;text-align:left}
   <aside class="col info" id="info"><div class="loading"><div><div class="spin"></div>טוען...</div></div></aside>
   <section class="center">
     <div class="sh" id="sh"></div>
-    <div class="legend"><span style="--c:#f5b041">SMA20</span><span style="--c:#3d7bfd">SMA50</span><span style="--c:#8c63ff">SMA200</span><span style="--c:#33c6f0">Trend channel</span><span style="--c:#26c99a">Support</span><span style="--c:#f0506e">Resistance</span></div>
+    <div class="legend" id="legend"></div><div class="lghelp" id="lgHelp" hidden></div>
     <div id="chart"></div>
     <div class="ind"><div class="tb" id="indTabs"></div><div id="indC"></div></div>
   </section>
@@ -508,7 +513,30 @@ let mainC=null,indC=null;
 const base={layout:{background:{color:'#0b0e14'},textColor:'#8a94a8',fontFamily:'JetBrains Mono',fontSize:11},grid:{vertLines:{color:'#151b26'},horzLines:{color:'#151b26'}},
   rightPriceScale:{borderColor:'#232b3a'},timeScale:{borderColor:'#232b3a'},crosshair:{mode:0}};
 function cutT(){const d=state.data,n={'3M':63,'6M':126,'1Y':252,'2Y':9999}[state.range];return d.candles.length>n?d.candles[d.candles.length-n][0]:0}
-function drawChart(){const d=state.data;if(!d)return;const el=$('#chart');if(mainC){mainC.remove();mainC=null}
+const LG={sma20:['#f5b041','ממוצע 20','ממוצע נע של 20 ימי המסחר האחרונים: המגמה הקצרה. מחיר מעליו = מומנטום קצר חיובי.'],
+ sma50:['#3d7bfd','ממוצע 50','ממוצע נע של 50 יום: המגמה הבינונית.'],
+ sma200:['#8c63ff','ממוצע 200','ממוצע נע של 200 יום: המגמה הראשית. מחיר מעליו נחשב מגמה ארוכה עולה.'],
+ chan:['#33c6f0','תעלת מגמה','קו מגמה מחושב מ-60 הסגירות האחרונות, וגבולות במרחק 2 סטיות תקן. הקו המקווקו באמצע הוא מרכז התעלה. ליד הגבול התחתון המחיר נמוך יחסית לתעלה, ליד העליון הוא מתוח.'],
+ sup:['#26c99a','תמיכה (S1-S3)','רמות מחיר שבהן ירידות נעצרו בעבר (שפלים מקומיים). S1 הקרובה ביותר מתחת למחיר.',1],
+ res:['#f0506e','התנגדות (R1-R3)','רמות מחיר שבהן עליות נעצרו בעבר (שיאים מקומיים). R1 הקרובה ביותר מעל המחיר.',1],
+ entry:['#3d7bfd','Entry','מחיר הכניסה המשוער בתוכנית: המחיר האחרון, כשהכניסה עצמה בפתיחה הבאה.'],
+ ext:['#b9a2ff','PM / AH','המחיר כרגע במסחר המוקדם (PM) או המאוחר (AH), מחוץ לשעות המסחר הרגילות.'],
+ avl:['#e9a23b','AVWAP שפל','המחיר הממוצע (משוקלל לפי נפח) של כל מי שקנה מאז השפל המאושר האחרון. מחיר מעליו = רוב מי שקנה מאז נמצא ברווח. מחושב מנרות יומיים, לכן קירוב.'],
+ avh:['#c77dff','AVWAP שיא','אותו חישוב מאז השיא השנתי. מחיר מתחתיו = רוב מי שקנה מאז השיא בהפסד, ולכן ייתכן לחץ מכירה כשהמחיר מתקרב אליו.'],
+ poc:['#f5b041','≈POC','המחיר שבו נסחר הכי הרבה נפח ב-120 הימים האחרונים. זה אומדן מנרות יומיים, לא נתון מדויק.'],
+ va:['rgba(245,176,65,.6)','≈VAH / ≈VAL','הגבול העליון והתחתון של האזור שבו נסחרו כ-70% מהנפח באותה תקופה (אומדן).',1],
+ vol:['rgba(138,148,168,.6)','נפח','עמודות הנפח היומי בתחתית הגרף: ירוק ביום עלייה, אדום ביום ירידה.']};
+const IND_HELP={cci:'CCI 20: מודד כמה המחיר רחוק מהממוצע שלו. מעל 100 מומנטום חזק, מתחת ל-100- חולשה או מכירת יתר.',
+ rsi:'RSI 14: עוצמת העליות מול הירידות ב-14 ימים, בין 0 ל-100. מעל 70 קנייה ביתר, מתחת ל-30 מכירת יתר (המצב שנבדק במחקר).',
+ macd:'MACD: ההפרש בין ממוצע 12 לממוצע 26 (הקו), מול ממוצע 9 שלו (קו האות). חציה של הקו מעל קו האות = מומנטום מתחזק.',
+ obv:'OBV: נפח מצטבר, מוסיף את הנפח בימי עלייה ומפחית בימי ירידה. OBV עולה = יותר נפח בימי עלייה.'};
+function renderLegend(){const d=state.data;if(!d)return;const t=d.tech,ov=t.overlays||{},k=[];
+  if(state.sma)k.push('sma20','sma50','sma200');if(state.chan)k.push('chan');k.push('sup','res');if(d.plan)k.push('entry');if(d.ext&&d.ext.active)k.push('ext');
+  if(state.avwap){if(ov.avwap_low)k.push('avl');if(ov.avwap_high)k.push('avh')}if(state.vp&&ov.vprofile)k.push('poc','va');k.push('vol');
+  $('#legend').innerHTML=k.map(x=>`<span class="${LG[x][3]?'dash':''}" style="--c:${LG[x][0]}" title="${LG[x][2]}">${LG[x][1]}</span>`).join('')+`<button onclick="state.lgHelp=!state.lgHelp;drawChart();drawInd()">${state.lgHelp?'סגור הסבר':'ⓘ מה כל קו?'}</button>`;
+  const hp=$('#lgHelp');hp.hidden=!state.lgHelp;
+  if(state.lgHelp)hp.innerHTML=k.map(x=>`<div class="${LG[x][3]?'dash':''}" style="--c:${LG[x][0]}"><b>${LG[x][1]}:</b> ${LG[x][2]}</div>`).join('')+`<div style="--c:var(--mute)"><b>גרף תחתון:</b> ${IND_HELP[state.ind]||''}</div>`}
+function drawChart(){const d=state.data;if(!d)return;renderLegend();const el=$('#chart');if(mainC){mainC.remove();mainC=null}
   mainC=LightweightCharts.createChart(el,Object.assign({},base,{width:el.clientWidth,height:el.clientHeight}));const cut=cutT(),t=d.tech,s=t.series;
   const F=a=>a.filter(x=>x[0]>=cut).map(x=>({time:x[0],value:x[1]}));
   const cs=mainC.addCandlestickSeries({upColor:'#26c99a',downColor:'#f0506e',borderVisible:false,wickUpColor:'#26c99a',wickDownColor:'#f0506e'});
@@ -526,7 +554,7 @@ function drawChart(){const d=state.data;if(!d)return;const el=$('#chart');if(mai
   if(d.ext&&d.ext.active)cs.createPriceLine({price:d.ext.price,color:'#b9a2ff',lineWidth:2,lineStyle:1,title:d.ext.session==='pre'?'PM':'AH'});
   mainC.timeScale().fitContent();
   mainC.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(r&&indC)indC.timeScale().setVisibleLogicalRange(r)})}
-function drawInd(){const d=state.data;if(!d)return;const el=$('#indC');if(indC){indC.remove();indC=null}
+function drawInd(){const d=state.data;if(!d)return;if(state.lgHelp)renderLegend();const el=$('#indC');if(indC){indC.remove();indC=null}
   indC=LightweightCharts.createChart(el,Object.assign({},base,{width:el.clientWidth,height:el.clientHeight,timeScale:{visible:false}}));const cut=cutT(),s=d.tech.series;
   const F=a=>a.filter(x=>x[0]>=cut).map(x=>({time:x[0],value:x[1]}));
   indC.addLineSeries({visible:false}).setData(d.candles.filter(x=>x[0]>=cut).map(x=>({time:x[0]})));
