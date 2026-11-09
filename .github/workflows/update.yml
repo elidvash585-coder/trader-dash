@@ -1,10 +1,14 @@
 name: Update dashboard
 
+# Outside US market hours: one build per run (pre-market / after the close, every 30 min).
+# During market hours (9:30-16:00 New York): each run rebuilds and redeploys every ~5 minutes for
+# about an hour. A newer run (the next schedule or a push) cancels the running one, so the loop is
+# continuous even when GitHub delays scheduled runs, and new code is picked up right away.
 on:
   schedule:
-    - cron: "7,37 8-20 * * 1-5"   # every 30 min, pre-market (4:00 ET) to the close (UTC)
+    - cron: "7,37 8-21 * * 1-5"   # UTC; covers pre-market, the session and after hours
     - cron: "23 22 * * 1-5"       # once after the close
-  workflow_dispatch:                # "Run workflow" button
+  workflow_dispatch:
   push:
     branches: [main]
 
@@ -18,8 +22,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  update:
     runs-on: ubuntu-latest
+    timeout-minutes: 80
+    environment:
+      name: github-pages
+      url: ${{ steps.d1.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -30,25 +38,251 @@ jobs:
           which pdftotext && exit 0
           sudo rm -f /var/lib/man-db/auto-update
           sudo apt-get install -y -qq --no-install-recommends poppler-utils > /dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends poppler-utils > /dev/null)
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
         with:
           path: cache
           key: data-${{ github.run_id }}
           restore-keys: data-
       - name: Unit tests (the site is not rebuilt if they fail)
         run: python -m unittest discover -s tests
-      - run: python build.py
+      - name: Is the US market open now?
+        id: gate
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import datetime, zoneinfo
+          n = datetime.datetime.now(zoneinfo.ZoneInfo("America/New_York"))
+          m = n.hour * 60 + n.minute
+          print("open=%s" % ("true" if n.weekday() < 5 and 9 * 60 + 25 <= m < 16 * 60 + 5 else "false"))
+          PY
+      - name: Build (1)
+        run: python build.py
         env:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
+          name: site-1
+      - id: d1
         uses: actions/deploy-pages@v4
+        with:
+          artifact_name: site-1
+      - uses: actions/cache/save@v4   # saved now: a later run may cancel this one before it ends
+        with:
+          path: cache
+          key: data-${{ github.run_id }}
+      - name: Wait (2)
+        if: steps.gate.outputs.open == 'true'
+        run: sleep 225
+      - name: Build (2)
+        if: steps.gate.outputs.open == 'true'
+        run: python build.py
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.gate.outputs.open == 'true'
+        with:
+          path: site
+          name: site-2
+      - id: d2
+        uses: actions/deploy-pages@v4
+        if: steps.gate.outputs.open == 'true'
+        with:
+          artifact_name: site-2
+      - name: Wait (3)
+        if: steps.gate.outputs.open == 'true'
+        run: sleep 225
+      - name: Build (3)
+        if: steps.gate.outputs.open == 'true'
+        run: python build.py
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.gate.outputs.open == 'true'
+        with:
+          path: site
+          name: site-3
+      - id: d3
+        uses: actions/deploy-pages@v4
+        if: steps.gate.outputs.open == 'true'
+        with:
+          artifact_name: site-3
+      - name: Wait (4)
+        if: steps.gate.outputs.open == 'true'
+        run: sleep 225
+      - name: Build (4)
+        if: steps.gate.outputs.open == 'true'
+        run: python build.py
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.gate.outputs.open == 'true'
+        with:
+          path: site
+          name: site-4
+      - id: d4
+        uses: actions/deploy-pages@v4
+        if: steps.gate.outputs.open == 'true'
+        with:
+          artifact_name: site-4
+      - name: Wait (5)
+        if: steps.gate.outputs.open == 'true'
+        run: sleep 225
+      - name: Build (5)
+        if: steps.gate.outputs.open == 'true'
+        run: python build.py
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.gate.outputs.open == 'true'
+        with:
+          path: site
+          name: site-5
+      - id: d5
+        uses: actions/deploy-pages@v4
+        if: steps.gate.outputs.open == 'true'
+        with:
+          artifact_name: site-5
+      - name: Wait (6)
+        if: steps.gate.outputs.open == 'true'
+        run: sleep 225
+      - name: Build (6)
+        if: steps.gate.outputs.open == 'true'
+        run: python build.py
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.gate.outputs.open == 'true'
+        with:
+          path: site
+          name: site-6
+      - id: d6
+        uses: actions/deploy-pages@v4
+        if: steps.gate.outputs.open == 'true'
+        with:
+          artifact_name: site-6
+      - name: Wait (7)
+        if: steps.gate.outputs.open == 'true'
+        run: sleep 225
+      - name: Build (7)
+        if: steps.gate.outputs.open == 'true'
+        run: python build.py
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.gate.outputs.open == 'true'
+        with:
+          path: site
+          name: site-7
+      - id: d7
+        uses: actions/deploy-pages@v4
+        if: steps.gate.outputs.open == 'true'
+        with:
+          artifact_name: site-7
+      - name: Wait (8)
+        if: steps.gate.outputs.open == 'true'
+        run: sleep 225
+      - name: Build (8)
+        if: steps.gate.outputs.open == 'true'
+        run: python build.py
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.gate.outputs.open == 'true'
+        with:
+          path: site
+          name: site-8
+      - id: d8
+        uses: actions/deploy-pages@v4
+        if: steps.gate.outputs.open == 'true'
+        with:
+          artifact_name: site-8
+      - name: Wait (9)
+        if: steps.gate.outputs.open == 'true'
+        run: sleep 225
+      - name: Build (9)
+        if: steps.gate.outputs.open == 'true'
+        run: python build.py
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.gate.outputs.open == 'true'
+        with:
+          path: site
+          name: site-9
+      - id: d9
+        uses: actions/deploy-pages@v4
+        if: steps.gate.outputs.open == 'true'
+        with:
+          artifact_name: site-9
+      - name: Wait (10)
+        if: steps.gate.outputs.open == 'true'
+        run: sleep 225
+      - name: Build (10)
+        if: steps.gate.outputs.open == 'true'
+        run: python build.py
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.gate.outputs.open == 'true'
+        with:
+          path: site
+          name: site-10
+      - id: d10
+        uses: actions/deploy-pages@v4
+        if: steps.gate.outputs.open == 'true'
+        with:
+          artifact_name: site-10
+      - name: Wait (11)
+        if: steps.gate.outputs.open == 'true'
+        run: sleep 225
+      - name: Build (11)
+        if: steps.gate.outputs.open == 'true'
+        run: python build.py
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.gate.outputs.open == 'true'
+        with:
+          path: site
+          name: site-11
+      - id: d11
+        uses: actions/deploy-pages@v4
+        if: steps.gate.outputs.open == 'true'
+        with:
+          artifact_name: site-11
+      - name: Wait (12)
+        if: steps.gate.outputs.open == 'true'
+        run: sleep 225
+      - name: Build (12)
+        if: steps.gate.outputs.open == 'true'
+        run: python build.py
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.gate.outputs.open == 'true'
+        with:
+          path: site
+          name: site-12
+      - id: d12
+        uses: actions/deploy-pages@v4
+        if: steps.gate.outputs.open == 'true'
+        with:
+          artifact_name: site-12
+      - name: Wait (13)
+        if: steps.gate.outputs.open == 'true'
+        run: sleep 225
+      - name: Build (13)
+        if: steps.gate.outputs.open == 'true'
+        run: python build.py
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.gate.outputs.open == 'true'
+        with:
+          path: site
+          name: site-13
+      - id: d13
+        uses: actions/deploy-pages@v4
+        if: steps.gate.outputs.open == 'true'
+        with:
+          artifact_name: site-13
