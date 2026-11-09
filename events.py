@@ -114,8 +114,22 @@ def parse_halts(xml_text):
 
 # ---------------------------------------------------------------- headlines
 
-def headline_cluster(news, now=None, hours=24):
-    """Serious headlines in the last `hours` hours. Duplicates (same title) are counted once."""
+_SUFFIX = re.compile(r"\b(inc|corp|corporation|co|company|ltd|plc|holdings|group|class [a-z]|the)\b\.?", re.I)
+
+
+def name_pattern(sym, name=None):
+    """Regex that a headline must match to be about THIS company: the ticker, or the first word of the
+    company name (Yahoo's feed for a symbol also carries news about other companies)."""
+    alts = [re.escape(sym.split("-")[0].upper())]
+    words = [w for w in re.split(r"[\s,.]+", _SUFFIX.sub(" ", name or "")) if len(w) >= 3]
+    if words:
+        alts.append(re.escape(words[0]))
+    return re.compile(r"\b(" + "|".join(alts) + r")(?:'s|\u2019s)?\b", re.I)
+
+
+def headline_cluster(news, now=None, hours=24, about=None):
+    """Serious headlines in the last `hours` hours that are about this company (`about`: name_pattern).
+    Duplicates (same title) are counted once."""
     now = now or datetime.datetime.utcnow()
     seen, hits = set(), []
     for n in news or []:
@@ -130,7 +144,10 @@ def headline_cluster(news, now=None, hours=24):
         if key in seen:
             continue
         seen.add(key)
-        if SERIOUS.search(title):
+        # the company and the serious word must sit in the same clause: "X Falls on Spy Probe; Y Holds Steady"
+        # is about X, not Y
+        clauses = re.split(r"\s*[;|:\u2014\u2013]\s*|,\s+(?=[A-Z])", title)
+        if any(SERIOUS.search(c) and (about is None or about.search(c)) for c in clauses):
             hits.append({"title": title, "time": n.get("time"), "link": n.get("link")})
     return hits
 
@@ -179,7 +196,7 @@ def assess(sym, candles=None, spy=None, sec=None, halts=None, news=None, fund=No
     elif recent and z >= 2.5 and rv >= 2:
         level = max(level, 1)
     # 3. headlines
-    hl = headline_cluster(news, now)
+    hl = headline_cluster(news, now, about=name_pattern(sym, (fund or {}).get("name")))
     if len(hl) >= 2 and recent and z >= 3:
         level = max(level, 2)
     elif len(hl) >= 2:
