@@ -33,6 +33,7 @@ import features as FX  # noqa: E402  (v2 engine, standard library only)
 import market as MK  # noqa: E402
 import engine as EN  # noqa: E402
 import risk as RK  # noqa: E402
+import events as EV  # noqa: E402
 try:
     import extras  # time machine, SEC, Congress (day-trader-skill)
 except Exception:
@@ -776,17 +777,53 @@ def events_for(fund, sec, ext, plan2):
     return ev, blockers
 
 
-def engine_block(tech, fund, sec, ext, ind):
-    """Historical score v2, the tested plan and the decision, all from closed bars."""
+def engine_block(tech, fund, sec, ext, ind, event=None):
+    """Historical score v2, the tested plan and the decision, all from closed bars.
+    A critical event (events.py) in the last 3 sessions caps the score and suspends entry."""
     x = dict(tech.get("fx") or {})
     if not x:
         return None, None, None
     x.setdefault("rsi", tech.get("rsi"))
     plan2 = EN.plan_v2(x)
     ev, blockers = events_for(fund, sec, ext, plan2)
+    crit = bool(event and event.get("level") == "critical")
+    if crit:
+        blockers.append("אירוע מהותי ב-3 ימי המסחר האחרונים (%s)" % event.get("verify"))
     hist = EN.hist_score(x.get("rsi"), tech.get("asset"), blockers)
     dec = EN.decide(x, hist, ind, plan2, ev, tech.get("asset"), fund)
+    if crit and dec["code"] != "exposure":
+        dec.update(verdict="המתנה: אירוע מהותי", code="wait",
+                   missing="אירוע מהותי ב-3 ימי המסחר האחרונים: המחקר לא מתאר מצבים כאלה",
+                   change="הכניסה תיבחן מחדש אחרי 3 ימי מסחר בלי אירוע חדש")
+    elif crit:
+        dec["missing"] = "אירוע מהותי ב-3 ימי המסחר האחרונים"
     return hist, plan2, dec
+
+
+_halts = {"t": 0, "v": {}}
+
+
+def halts():
+    """Nasdaq trade halts (public RSS), cached 5 minutes. Empty when unreachable (never guessed)."""
+    if DEMO:
+        return {}
+    if time.time() - _halts["t"] > 300:
+        try:
+            _halts["v"] = EV.parse_halts(get(EV.HALTS_URL, timeout=10))
+        except Exception:
+            pass
+        _halts["t"] = time.time()
+    return _halts["v"]
+
+
+def event_for(sym, candles, sec=None, news_=None, fund=None):
+    m = market_ctx() or {}
+    spy = (m["spy"]["t"], m["spy"]["c"]) if m.get("spy") else None
+    try:
+        return EV.assess(sym, candles, spy, sec, halts(), news_, fund)
+    except Exception as e:
+        print("event check failed for %s: %s" % (sym, e))
+        return None
 
 
 def trade_plan(tech, cfg):
@@ -1082,7 +1119,8 @@ def analyze(sym, force=False):
     out["mc"] = (EN.TABLE or {}).get("mc")
     if out["score"]:
         out["decision"]["code"] = out["score"]["code"]
-    hist, plan2, dec = engine_block(base["tech"], out["fund"], out["sec"], base.get("ext"), out["ind_score"])
+    out["event"] = event_for(sym, base["candles"], out["sec"], out["news"], out["fund"])
+    hist, plan2, dec = engine_block(base["tech"], out["fund"], out["sec"], base.get("ext"), out["ind_score"], out["event"])
     if hist is not None:
         out["score_v1"], out["score"], out["plan2"] = out["score"], hist, plan2
         dec["ext_alerts"] = out["decision"].get("ext_alerts")
@@ -1124,7 +1162,8 @@ def quick(sym, force=False):
         if sc:
             dec["code"] = sc["code"]
         if t.get("fx"):
-            hv, _, d2 = engine_block(t, f if f else None, full.get("sec"), a.get("ext"), isc)
+            evq = full.get("event") if full else event_for(sym, a["candles"])
+            hv, _, d2 = engine_block(t, f if f else None, full.get("sec"), a.get("ext"), isc, evq)
             sc = hv
             dec = {"verdict": d2["verdict"], "code": hv["code"], "score": None}
         return {"symbol": sym, "price": t["price"], "change_1d": t["change_1d"], "change_1m": t["change_1m"],
@@ -1134,6 +1173,7 @@ def quick(sym, force=False):
                 "decision_score": dec["score"], "channel": t["channel"]["kind"], "name": f.get("name"),
                 "tm": {"p_target": tm["p_target"], "lean": tm["lean"]} if tm else None,
                 "score": sc["value"] if sc else None, "score_label": sc["label"] if sc else None, "act": dec["verdict"], "act_code": d2["code"] if t.get("fx") else None,
+                "event": (evq or {}).get("level") if t.get("fx") else None,
                 "p_profit": sc.get("p_profit") if sc else None, "ind": isc["value"] if isc else None,
                 "ext": {k: (a.get("ext") or {}).get(k) for k in ("session", "active", "price", "change", "gap", "volume", "vol_pct")}
                 if (a.get("ext") or {}).get("active") else None}

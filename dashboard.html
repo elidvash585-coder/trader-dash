@@ -76,6 +76,7 @@ input:focus{border-color:var(--acc)}
 .lghelp{margin:6px 14px 0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);font-size:11.5px;line-height:1.55;display:grid;gap:3px;max-height:190px;overflow:auto}
 .lghelp div:before{content:"";display:inline-block;width:12px;height:3px;border-radius:2px;margin-left:6px;vertical-align:middle;background:var(--c)}.lghelp div.dash:before{height:0;background:none;border-top:2px dashed var(--c)}
 .lghelp b{color:var(--text);font-weight:600}
+.lghelp[hidden]{display:none}
 #chart{flex:1;min-height:260px;direction:ltr}
 .ind{height:170px;border-top:1px solid var(--line);display:flex;flex-direction:column}
 .ind .tb{padding:4px 10px;border-bottom:1px solid var(--line)}
@@ -91,6 +92,8 @@ input:focus{border-color:var(--acc)}
 .dec.go .v b{color:var(--up)}.dec.wait .v b{color:var(--warn)}.dec.no .v b{color:var(--mute)}
 .dec p{margin:10px 0 0;line-height:1.55;color:#d6dceb}
 .chk{list-style:none;margin:0;padding:0;display:grid;gap:7px}
+.evb{border:1px solid;border-right-width:4px;border-radius:10px;padding:9px 11px}.evb .pill{font-size:11px;border:1px solid;border-radius:999px;padding:1px 8px;white-space:nowrap}
+.evx{color:var(--down);font-size:12px;margin-inline-start:5px}
 details.adv summary{cursor:pointer;list-style:none}details.adv summary::-webkit-details-marker{display:none}details.adv summary h4:after{content:" ▾";color:var(--dim)}details.adv[open] summary h4:after{content:" ▴"}
 .rst td{padding:3px 4px;border-bottom:1px solid rgba(35,43,58,.6)}
 .chk li{display:grid;grid-template-columns:20px 1fr;gap:6px;align-items:start;font-size:12.5px}
@@ -272,7 +275,7 @@ function renderWL(){
     const x=`<span class="x" title="הסר" onclick="event.stopPropagation();rmSym('${r.symbol}')">✕</span>`;
     if(r.loading)return `<div class="wr ${sel}" onclick="select('${r.symbol}')"><div class="s"><b>${r.symbol}</b><small>טוען...</small></div><div class="p dim">···</div><div class="rec ld">···</div><div class="rec ld">···</div>${x}</div>`;
     if(r.error)return `<div class="wr ${sel}" onclick="select('${r.symbol}')"><div class="s"><b>${r.symbol}</b><small class="warn">אין נתונים</small></div><div class="p dim">—</div><div class="rec ld">—</div><div class="rec ld">—</div>${x}</div>`;
-    return `<div class="wr ${sel}" onclick="select('${r.symbol}')"><div class="s"><b>${r.symbol}</b>${r.congress?`<span class="badge" title="עסקאות חברי קונגרס ב-90 יום">🏛 ${r.congress}</span>`:''}<small>${r.name||('תעלה '+r.channel)}</small></div>
+    return `<div class="wr ${sel}" onclick="select('${r.symbol}')"><div class="s"><b>${r.symbol}</b>${r.event==='critical'?'<span class="evx" title="אירוע מהותי: פרטים בלוח המניה">⚠</span>':''}${r.congress?`<span class="badge" title="עסקאות חברי קונגרס ב-90 יום">🏛 ${r.congress}</span>`:''}<small>${r.name||('תעלה '+r.channel)}</small></div>
       <div class="p">${fmt(r.price)}<small class="${cls(r.change_1d)}">${pct(r.change_1d)}</small>${r.ext?`<span class="extc ${r.ext.gap?'gap':''}" title="${r.ext.session==='pre'?'Pre-market':'After-hours'} ${fmt(r.ext.price)}">${r.ext.gap?'⚡':''}${r.ext.session==='pre'?'PM':'AH'} ${pct(r.ext.change,1)}</span>`:''}</div>
       <div class="rec" style="color:${scCol(r.score)};border-color:${scCol(r.score)};font-family:var(--mono);font-size:13px" title="${r.score_label||'N/A'}${r.act?' · '+r.act:''}${r.p_profit!=null?' · '+fmt(r.p_profit,0)+'% ברווח בהיסטוריה':''}">${r.score!=null?fmt(r.score,1):'—'}</div>
       <div class="rec" style="color:${inCol(r.ind)};border-color:${inCol(r.ind)};border-style:dashed;font-family:var(--mono);font-size:13px" title="ציון אינדיקטורים (לא נבדק)">${r.ind!=null?fmt(r.ind,1):'—'}</div>${x}</div>`}).join('');
@@ -318,7 +321,7 @@ function tmSec(d){const m=d.tm;if(!m)return'';const h=m.history||{};
    <div class="dim" style="font-size:11px;margin-top:8px">הדמיה מהימים של המניה עצמה, לא תחזית. דוחות וחדשות יכולים לעשות דברים שלא קרו בעבר.</div></div>`}
 function renderInfo(){const d=state.data,t=d.tech,ch=t.channel,dc=d.decision,p=d.plan,f=d.fund||{},a=f.analyst||{};
   const up=a.mean?(a.mean/t.price-1)*100:null;const dist=x=>pct((x/t.price-1)*100,1);const col=dc.code==='go'?'#26c99a':dc.code==='wait'?'#f5b041':'#5d6780';
-  let h=(d.errors||[]).map(e=>`<div class="err">${e}</div>`).join('');
+  let h=(d.errors||[]).map(e=>`<div class="err">${e}</div>`).join('')+evSec(d);
   const sc=d.score;
   const rg=(d.market||{}).regime;if(rg&&rg.label)$('#regime').innerHTML=`שוק: <b style="color:${rg.code==='on'?'var(--up)':rg.code==='off'?'var(--down)':'var(--warn)'}">${rg.label}</b>`;$('#regime').title=rg&&rg.label?`נקודות ${rg.points}${d.market.vix?' · VIX '+d.market.vix:''} · SPY/QQQ מול ממוצעים 50/200`:'';
   if(sc&&sc.version==='v2'){const c=sc.value==null?'var(--dim)':scCol(sc.value),dcol={go:'var(--up)',wait:'var(--warn)',watch:'var(--mute)',exposure:'var(--down)'}[dc.code]||'var(--mute)',m=sc.meta||{};
@@ -369,6 +372,14 @@ function renderInfo(){const d=state.data,t=d.tech,ch=t.channel,dc=d.decision,p=d
   ${a.mean?`<div class="sec"><h4>אנליסטים</h4><div class="kvs"><div><label>המלצה</label><b style="font-family:Heebo">${REC[a.key]||'—'}</b></div><div><label>יעד ממוצע</label><b>${fmt(a.mean)} <span class="${cls(up)}">${pct(up,0)}</span></b></div></div></div>`:''}`;
   h+=advSec(d);
   $('#info').innerHTML=h}
+function evSec(d){const e=d.event;if(!e)return'';const crit=e.level==='critical',c=crit?'var(--down)':'var(--warn)';
+  const vc=e.verify==='מאומת'?'var(--up)':e.verify.startsWith('מדווח')?'var(--warn)':'var(--down)';
+  return `<div class="sec"><div class="evb" style="border-color:${c};background:color-mix(in srgb,${c} 10%,transparent)">
+   <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="color:${c}">${crit?'⚠ אירוע מהותי':'אירוע חשוב'}</b><span class="pill" style="border-color:${vc};color:${vc}">${e.verify}</span></div>
+   <ul style="margin:6px 0 0;padding-inline-start:18px;font-size:12.5px;line-height:1.55">${e.facts.map(f=>`<li>${f}</li>`).join('')}</ul>
+   ${e.effects.length?`<div style="font-size:12px;margin-top:6px"><span class="dim">מה זה עושה למערכת:</span> ${e.effects.join(' · ')}</div>`:''}
+   ${e.sources.length?`<div style="font-size:11px;margin-top:6px" class="dim">מקורות: ${e.sources.map(x=>`<a href="${x.url||'#'}" target="_blank" rel="noopener" style="color:var(--acc)">${{SEC:'SEC',halt:'Nasdaq',headline:'כותרת'}[x.type]||x.type}</a> <span class="num">${(x.time||'').slice(0,16)}</span>`).join(' · ')}</div>`:''}
+   <div class="dim" style="font-size:10.5px;margin-top:5px">עובדות ותגובת שוק בלבד, בלי פרשנות. הנתונים החינמיים מגיעים באיחור של דקות עד שעות, כך שזה כלי לניהול סיכון ולא אות מסחר.</div></div></div>`}
 function planSec(d){const q=d.plan2;if(!q)return'';const sc=d.score||{},at=(d.tech.asset||{});
   return `<div class="sec"><h4>תוכנית העסקה שנבדקה <span class="dim">כניסה בפתיחה, סטופ 1 ATR, 10 ימים</span></h4><div class="kvs">
    <div><label>אזור כניסה</label><b style="color:var(--acc)">${fmt(q.entry_zone[0])}–${fmt(q.entry_zone[1])}</b></div><div><label>סטופ</label><b class="down">${fmt(q.stop)} <small class="dim">-${fmt(q.stop_pct,1)}% · 1 ATR</small></b></div>

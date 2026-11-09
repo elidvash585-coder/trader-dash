@@ -492,6 +492,15 @@ def build_panel(syms, sect):
             mr = df.index[(df.rsi < 30)].to_numpy()
             hi20 = pd.Series(C).shift(1).rolling(20).max()
             tf = df.index[(df.price > df.sma50) & (df.sma50 > df.sma200) & (df.rs_spy_60 > 0) & (df.adx > 20) & (df.price > hi20)].to_numpy()
+            # extreme move vs the market (same rule as events.py): |z| >= 4 with RVOL >= 3, in the last 3 sessions
+            r_ = pd.Series(C).pct_change()
+            m_ = pd.Series(b["SPY"], dtype=float).pct_change()
+            beta_ = (r_.rolling(120).cov(m_) / m_.rolling(120).var()).shift(1)
+            res_ = r_ - beta_ * m_
+            z_ = res_ / res_.rolling(60).std().shift(1)
+            ext_ = ((z_.abs() >= 4) & (df.rvol >= 3)).astype(float)
+            df["evt3"] = ext_.rolling(3, min_periods=1).max().fillna(0)
+            df["evt_dir"] = np.sign(z_.where(ext_ > 0)).ffill(limit=2).fillna(0)
             df = attach_pit(df, PIT.get(s))
             qcond = ((df.qg_yoy > 0.10) & (df.qg_margin > 0) & (df.qg_dmargin >= 0) & (df.qg_age <= 200)
                      & (df.price > df.sma200) & (df.rs_spy_60 > 0)).to_numpy()
@@ -732,6 +741,26 @@ def score_table_v2(panel):
             "excluded": "crypto, leveraged and inverse ETFs (not in the research universe)"}
 
 
+def event_pause(panel):
+    """Does the 3-session pause after an extreme move matter? Model-trade R on days inside the
+    window vs outside, for all days and for oversold days (RSI < 30), with month-block CIs."""
+    out = {}
+    for name, d in (("all", panel), ("oversold", panel[panel.rsi < 30])):
+        ins, outs = d[d.evt3 > 0], d[d.evt3 == 0]
+        if len(ins) < 30:
+            out[name] = {"n_in": int(len(ins))}
+            continue
+        out[name] = {"n_in": int(len(ins)), "n_out": int(len(outs)), "R_in": round(float(ins.R.mean()), 3),
+                     "R_out": round(float(outs.R.mean()), 3), "diff": round(float(ins.R.mean() - outs.R.mean()), 3),
+                     "diff_ci": edge_ci(ins, outs), "stop_in": round(float(ins.kind.isin([2, 5]).mean() * 100), 1),
+                     "stop_out": round(float(outs.kind.isin([2, 5]).mean() * 100), 1),
+                     "gap_loss_in": round(float((ins.R < -1.25).mean() * 100), 1), "gap_loss_out": round(float((outs.R < -1.25).mean() * 100), 1)}
+        for dname, dv in (("after_drop", -1), ("after_jump", 1)):
+            x = ins[ins.evt_dir == dv]
+            out[name][dname] = {"n": int(len(x)), "R": round(float(x.R.mean()), 3) if len(x) else None}
+    return out
+
+
 def mc_sequences(sig, n_trades=50, paths=2000, seed=21):
     """Monte Carlo of the NEXT n_trades of a strategy: whole calendar months of real trades are drawn
     with replacement and laid end to end (trades in the same month stay together, so the clustering of
@@ -843,6 +872,16 @@ def report(res):
             x = r["by_regime"][g]
             cells.append("n %d, %s %s" % (x["n"], "%+.3f" % x["edge"] if x["edge"] is not None else "—", fmt_ci(x["edge_ci"])))
         L.append("| %s | %s |" % (name, " | ".join(cells)))
+    ep = res.get("event_pause") or {}
+    if ep:
+        L += ["", "## After extreme moves (|z| >= 4 vs the market with RVOL >= 3, within 3 sessions)", "",
+              "| days | n inside | R inside | R outside | difference [CI] | stop% in/out | loss beyond 1.25R in/out | after a drop: n, R | after a jump: n, R |",
+              "|---|---|---|---|---|---|---|---|---|"]
+        for k, v in ep.items():
+            if "diff" in v:
+                L.append("| %s | %d | %+.3f | %+.3f | %+.3f %s | %.0f / %.0f | %.1f%% / %.1f%% | %d, %s | %d, %s |" % (
+                    k, v["n_in"], v["R_in"], v["R_out"], v["diff"], fmt_ci(v["diff_ci"]), v["stop_in"], v["stop_out"],
+                    v["gap_loss_in"], v["gap_loss_out"], v["after_drop"]["n"], v["after_drop"]["R"], v["after_jump"]["n"], v["after_jump"]["R"]))
     L += ["", "## Monte Carlo: the next 50 trades (whole months of real trades drawn with replacement)", "",
           "| variant | median R | 5% | 95% | P(below 0) | median max DD R | 95% max DD R | P(DD >= 10R) |", "|---|---|---|---|---|---|---|---|"]
     for name, m in (res.get("mc") or {}).items():
@@ -909,6 +948,7 @@ def main():
     mr_name = [k for k in VARIANTS["MR"]][0]
     st["mc"] = mc_sequences(trades[mr_name]["sig"]) if mr_name in trades else None
     res["mc"] = {k: mc_sequences(trades[k]["sig"]) for k in trades}
+    res["event_pause"] = event_pause(panel)
     res["qg_note"] = ("SEC point-in-time fundamentals for %d of %d stocks" % (sum(1 for v in PIT.values() if v is not None), len(syms))
                       if PIT else "SEC_USER_AGENT not set: Quality Growth not tested")
     if not D.DEMO:
