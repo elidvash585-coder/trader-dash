@@ -72,15 +72,15 @@ class Severity(unittest.TestCase):
 
     def test_single_headline_alone_raises_nothing(self):
         now = datetime.datetime(2026, 11, 9, 15, 0)
-        news = [{"title": "CEO arrested in espionage case, report says", "time": "2026-11-09 14:00"}]
-        self.assertIsNone(EV.assess("X", news=news, now=now))
+        news = [{"title": "Acme CEO arrested in espionage case, report says", "time": "2026-11-09 14:00"}]
+        self.assertIsNone(EV.assess("ACME", news=news, now=now, fund={"name": "Acme Corp"}))
 
     def test_two_serious_headlines_are_high_and_labelled(self):
         now = datetime.datetime(2026, 11, 9, 15, 0)
-        news = [{"title": "CEO arrested in espionage case", "time": "2026-11-09 14:00"},
-                {"title": "Company shares halted after CEO arrest report", "time": "2026-11-09 14:30"},
-                {"title": "CEO arrested in espionage case", "time": "2026-11-09 14:40"}]  # duplicate: counted once
-        e = EV.assess("X", news=news, now=now)
+        news = [{"title": "Acme CEO arrested in espionage case", "time": "2026-11-09 14:00"},
+                {"title": "Acme shares halted after CEO arrest report", "time": "2026-11-09 14:30"},
+                {"title": "Acme CEO arrested in espionage case", "time": "2026-11-09 14:40"}]  # duplicate: counted once
+        e = EV.assess("ACME", news=news, now=now, fund={"name": "Acme Corp"})
         self.assertEqual(e["level"], "high")
         self.assertEqual(e["verify"], "מדווח בכמה כותרות")
         self.assertEqual(e["headlines"], 2)
@@ -116,3 +116,15 @@ class Override(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Relevance(unittest.TestCase):
+    def test_headline_must_be_about_the_company(self):
+        now = datetime.datetime(2026, 11, 9, 19, 0)
+        t = ["NVIDIA Falls 5% as Board Probes Jensen Huang's Ties to Alleged Chinese Spy; AMD Rises 4%, Intel Holds Steady",
+             "Nvidia's Huang scandal rattles AI industry built around him",
+             "Nvidia Stock Drops On Spy Scandal, CEO Probe"]
+        news = [{"title": x, "time": "2026-11-09 15:00"} for x in t]
+        self.assertEqual(len(EV.headline_cluster(news, now, about=EV.name_pattern("NVDA", "NVIDIA Corporation"))), 3)
+        self.assertEqual(len(EV.headline_cluster(news, now, about=EV.name_pattern("INTC", "Intel Corporation"))), 0)
+        self.assertEqual(len(EV.headline_cluster(news, now, about=EV.name_pattern("AAPL", "Apple Inc."))), 0)
