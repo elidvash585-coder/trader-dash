@@ -211,8 +211,8 @@ def market_direction(c, v, c2=None, v2=None):
     states: uptrend (confirmed), pressure (uptrend with 4+ distribution days), correction, rally (attempt).
     Correction: the index below its 50-day line AND either 8 % under its 50-day high or 6+ distribution days
     (distribution without price damage only puts the uptrend "under pressure", as IBD does).
-    Follow-through day: day 4 or later of a rally attempt, index up >= 1.25 % on higher volume than the day
-    before -> confirmed uptrend. Undercutting the rally low restarts the attempt. Returns a list of states."""
+    Follow-through day: day 4 or later of a rally attempt, SPY or QQQ up >= 1.25 % on higher volume than the
+    day before -> confirmed uptrend (a follow-through on any one major index counts). Undercutting the rally low restarts the attempt. Returns a list of states."""
     s50 = FX.sma(c, 50)
     st, low, day1, ftd = "uptrend", None, None, None
     out = [None] * len(c)
@@ -243,7 +243,10 @@ def market_direction(c, v, c2=None, v2=None):
                 day1, st = i, "rally"
             elif day1 is not None:
                 k = i - day1 + 1
-                if k >= 4 and c[i] / c[i - 1] - 1 >= 0.0125 and v[i] > v[i - 1]:
+                spy_ftd = c[i] / c[i - 1] - 1 >= 0.0125 and v[i] > v[i - 1]
+                qqq_ftd = (c2 is not None and v2 is not None and len(c2) == len(c) and c2[i - 1] and
+                           c2[i] / c2[i - 1] - 1 >= 0.0125 and v2[i] > v2[i - 1])
+                if k >= 4 and (spy_ftd or qqq_ftd):   # the book: a follow-through on ANY major index
                     st, ftd = "uptrend", i
         out[i] = {"state": st, "dist": d, "rally_day": (i - day1 + 1) if st == "rally" and day1 else None, "ftd": ftd}
     return out
