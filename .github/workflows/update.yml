@@ -33,7 +33,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install pdftotext (Congress reports)
+      - name: Install pdftotext (Congress reports; optional, never blocks the site)
+        continue-on-error: true
+        timeout-minutes: 3
         run: |
           which pdftotext && exit 0
           sudo rm -f /var/lib/man-db/auto-update
