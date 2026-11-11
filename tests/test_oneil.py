@@ -106,6 +106,18 @@ class Market(unittest.TestCase):
         self.assertNotEqual(ON.market_direction(c, v)[-1]["state"], "uptrend")
 
 
+class MarketPressure(unittest.TestCase):
+    def test_distribution_without_price_damage_is_pressure_not_correction(self):
+        c, v = [100.0], [1e8]
+        for i in range(1, 140):                       # a rising market with many small high-volume down days
+            down = i % 4 == 0
+            c.append(c[-1] * (0.997 if down else 1.004))
+            v.append(v[-1] * (1.1 if down else 0.95))
+        st = ON.market_direction(c, v)
+        self.assertNotIn(st[-1]["state"], ("correction", "rally"))
+        self.assertTrue(any(x and x["state"] == "pressure" for x in st))
+
+
 class Canslim(unittest.TestCase):
     def test_unknowns_are_none_not_false(self):
         items = ON.canslim()
