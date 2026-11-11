@@ -118,6 +118,27 @@ class MarketPressure(unittest.TestCase):
         self.assertTrue(any(x and x["state"] == "pressure" for x in st))
 
 
+class FollowThroughResets(unittest.TestCase):
+    def test_no_relapse_right_after_a_follow_through_day(self):
+        c = [100 + i * 0.1 for i in range(80)]
+        v = [1e8] * 80
+        for k in range(12):                       # a correction on heavy, rising volume (many distribution days)
+            c.append(c[-1] * 0.99)
+            v.append(v[-1] * 1.05)
+        low = c[-1]
+        for x in (1.003, 1.006, 1.008):
+            c.append(low * x)
+            v.append(v[-1] * 0.9)
+        c.append(c[-1] * 1.02)                    # day 4: follow-through on higher volume
+        v.append(v[-1] * 1.3)
+        for k in range(3):                        # quiet up days, still under the 50-day line
+            c.append(c[-1] * 1.002)
+            v.append(v[-1] * 0.95)
+        st = ON.market_direction(c, v)
+        self.assertEqual(st[-4]["state"], "uptrend")
+        self.assertEqual(st[-1]["state"], "uptrend")
+
+
 class Canslim(unittest.TestCase):
     def test_unknowns_are_none_not_false(self):
         items = ON.canslim()
