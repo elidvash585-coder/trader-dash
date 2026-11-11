@@ -193,11 +193,13 @@ def acc_dis(c, v, i, n=65):
     return {"ratio": round(r, 2), "grade": "A" if r >= 1.5 else "B" if r >= 1.2 else "C" if r >= 0.9 else "D" if r >= 0.7 else "E"}
 
 
-def distribution_days(c, v, i, n=25):
+def distribution_days(c, v, i, n=25, since=None):
     """Index down >= 0.2 % on higher volume than the day before, in the last n sessions; a day stops counting
-    once the index closes 5 % above that day's close (IBD convention)."""
+    once the index closes 5 % above that day's close (IBD convention). `since`: a follow-through day starts a
+    new uptrend, so only days after it count."""
     out = []
-    for k in range(max(1, i - n + 1), i + 1):
+    lo = max(1, i - n + 1) if since is None else max(1, i - n + 1, since + 1)
+    for k in range(lo, i + 1):
         if c[k] < c[k - 1] * 0.998 and v[k] > v[k - 1]:
             if max(c[k:i + 1]) < c[k] * 1.05:
                 out.append(k)
@@ -215,11 +217,18 @@ def market_direction(c, v, c2=None, v2=None):
     st, low, day1, ftd = "uptrend", None, None, None
     out = [None] * len(c)
     for i in range(1, len(c)):
-        d = len(distribution_days(c, v, i))
+        d = len(distribution_days(c, v, i, since=ftd))
         if c2 is not None and v2 is not None and len(c2) == len(c):
-            d = max(d, len(distribution_days(c2, v2, i)))
+            d = max(d, len(distribution_days(c2, v2, i, since=ftd)))
         if st in ("uptrend", "pressure"):
-            hi50 = max(c[max(0, i - 50):i + 1])
+            # after a follow-through day, a new correction is measured from highs made SINCE that day; the
+            # follow-through fails outright if the index undercuts the rally low
+            start = max(0, i - 50) if ftd is None else max(i - 50, ftd)
+            hi50 = max(c[start:i + 1])
+            if ftd is not None and low is not None and c[i] < low:
+                st, low, day1 = "correction", c[i], None
+                out[i] = {"state": st, "dist": d, "rally_day": None, "ftd": ftd}
+                continue
             # a correction needs price damage: 8 % under the 50-day high below the 50-day line, or a heavy
             # distribution cluster (6+) WITH the index under its 50-day line. Distribution alone = "pressure".
             below50 = bool(s50[i] and c[i] < s50[i])
