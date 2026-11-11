@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-11 17:04 UTC",
+ "generated": "2026-11-11 17:10 UTC",
  "demo": false,
  "version": "v2-stage1",
  "stocks": 87,
@@ -3195,7 +3195,7 @@
  },
  "score_table_v2": {
   "version": "v2",
-  "generated": "2026-11-11 17:04 UTC",
+  "generated": "2026-11-11 17:11 UTC",
   "stocks": 87,
   "from": "2017-11-13",
   "to": "2026-10-28",
