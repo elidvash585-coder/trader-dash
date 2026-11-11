@@ -701,6 +701,19 @@ except Exception:
     RS_REF = None
 
 
+ON_RES = None
+try:  # backtest5_oneil.py results, summarised for the O'Neil section
+    with open(os.path.join(HERE, "research", "oneil.json"), encoding="utf-8") as _fh:
+        _r = json.load(_fh)
+    _pick = lambda pre: next(((k, v["all"]) for k, v in _r.get("variants", {}).items() if k.startswith(pre)), (None, {}))
+    ON_RES = {"stocks": _r.get("stocks"), "from": _r.get("from", "")[:4], "to": _r.get("to", "")[:4]}
+    for _k in ("ON1", "ON2", "ON3", "ON4"):
+        _n, _a = _pick(_k)
+        ON_RES[_k.lower()] = {"n": _a.get("n", 0), "exp": _a.get("expectancy"), "edge": _a.get("edge"), "ci": _a.get("edge_ci")}
+except Exception:
+    ON_RES = None
+
+
 def oneil_block(sym, candles, fund=None, sec=None):
     """O'Neil analysis on closed bars."""
     t = [x[0] for x in candles]
@@ -715,6 +728,7 @@ def oneil_block(sym, candles, fund=None, sec=None):
     rs_pct = ON.rs_percentile(raw_, ref)
     out = ON.analyze(t, o, h, l, c, v, spy, (sec or {}).get("growth"), fund, rs_pct, m.get("oneil_m"))
     out["rs_ref"] = "%d מניות גדולות (מחקר %s)" % (len(RS_REF["raw"]), RS_REF.get("date", "")) if RS_REF else "רשימת המעקב בלבד"
+    out["research"] = ON_RES
     return out
 
 
