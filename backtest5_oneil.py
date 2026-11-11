@@ -98,6 +98,9 @@ def main():
     ok = all(al)
     mstates = ON.market_direction(sc, sv, [x[0] for x in al] if ok else None, [x[1] for x in al] if ok else None)
     m_by_day = {int(t // 86400): (m or {}).get("state") for t, m in zip(st, mstates)}
+    states = [(m or {}).get("state") for m in mstates[260:]]
+    m_share = {ON.M_HE[k]: round(states.count(k) / len(states) * 100, 1) for k in ON.M_HE}   # sanity check
+    ftds = sum(1 for i in range(1, len(mstates)) if mstates[i] and mstates[i - 1] and mstates[i]["ftd"] != mstates[i - 1]["ftd"])
     # SEC point-in-time growth
     pit = {}
     ua = os.environ.get("SEC_USER_AGENT")
@@ -187,7 +190,8 @@ def main():
     base["month"] = base.date.dt.to_period("M")
     res = {"generated": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC"), "demo": D.DEMO,
            "stocks": len(data), "from": str(base.date.min().date()), "to": str(base.date.max().date()), "test_from": TEST_FROM,
-           "sec_stocks": len(pit), "variants": {}, "by_type": {}, "by_stage": {}, "by_market": {}}
+           "sec_stocks": len(pit), "variants": {}, "by_type": {}, "by_stage": {}, "by_market": {},
+           "market_share": m_share, "follow_through_days": ftds}
     if len(sig):
         sig["month"] = sig.date.dt.to_period("M")
         sig["exit_date"] = sig.date + pd.to_timedelta(sig.days * 1.45, unit="D")
@@ -254,7 +258,9 @@ def report(res):
     L += ["", "By base type (ON1): " + ", ".join("%s n %d exp %+.3f" % (k, v["n"], v["exp"]) for k, v in res["by_type"].items()),
           "By base stage (ON1): " + ", ".join("%s n %d exp %+.3f" % (k, v["n"], v["exp"]) for k, v in res["by_stage"].items()),
           "By market direction (ON1): " + ", ".join("%s n %d exp %+.3f" % (k, v["n"], v["exp"]) for k, v in res["by_market"].items()),
-          "Every day by market direction: " + ", ".join("%s %+.3f" % (k, v) for k, v in res["base_by_market"].items())]
+          "Every day by market direction: " + ", ".join("%s %+.3f" % (k, v) for k, v in res["base_by_market"].items()),
+          "Time in each market state (sanity check of M): " + ", ".join("%s %.0f%%" % (k, v) for k, v in res.get("market_share", {}).items()) +
+          "; follow-through days: %s" % res.get("follow_through_days")]
     return "\n".join(L) + "\n"
 
 
