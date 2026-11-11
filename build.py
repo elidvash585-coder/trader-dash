@@ -50,7 +50,7 @@ def main():
             q["ind"] = a["ind_score"]["value"] if a.get("ind_score") else None
             if hist is not None:
                 q.update(score=hist["value"], score_label=hist["label"], decision_code=hist["code"], act=dec["verdict"], act_code=dec["code"],
-                         event=(a.get("event") or {}).get("level"))
+                         event=(a.get("event") or {}).get("level"), on=(a.get("oneil") or {}).get("status"))
             rows.append(q)
             ok += 1
             print("ok   %-8s %s" % (sym, (a.get("decision") or {}).get("verdict", "")), flush=True)

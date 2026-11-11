@@ -34,6 +34,7 @@ import market as MK  # noqa: E402
 import engine as EN  # noqa: E402
 import risk as RK  # noqa: E402
 import events as EV  # noqa: E402
+import oneil as ON  # noqa: E402
 try:
     import extras  # time machine, SEC, Congress (day-trader-skill)
 except Exception:
@@ -636,11 +637,85 @@ _etf_cache = {}
 
 
 def market_ctx():
-    """SPY / QQQ / VIX context, cached 30 minutes."""
-    if _mkt["ctx"] is None or time.time() - _mkt["t"] > 1800:
-        _mkt["ctx"] = MK.context(demo_chart if DEMO else chart, EN.CFG.get("regime"))
+    """SPY / QQQ / VIX context, cached 30 minutes (5 during the session), plus O'Neil's market direction."""
+    ttl = 300 if us_session_open() else 1800
+    if _mkt["ctx"] is None or time.time() - _mkt["t"] > ttl:
+        ctx = MK.context(demo_chart if DEMO else chart, EN.CFG.get("regime"))
+        try:
+            ctx["oneil_m"] = oneil_market(ctx)
+        except Exception as e:
+            ctx["oneil_m"] = None
+            print("market direction failed: %s" % e)
+        _mkt["ctx"] = ctx
         _mkt["t"] = time.time()
     return _mkt["ctx"]
+
+
+def us_session_open():
+    try:
+        import zoneinfo
+        n = datetime.datetime.now(zoneinfo.ZoneInfo("America/New_York"))
+    except Exception:
+        return False
+    m = n.hour * 60 + n.minute
+    return n.weekday() < 5 and 570 <= m < 960
+
+
+def _closed(t, *arrays):
+    """Drop today's bar while the US session is still open (it is not a closed daily bar yet)."""
+    if t and us_session_open():
+        import zoneinfo
+        today = datetime.datetime.now(zoneinfo.ZoneInfo("America/New_York")).date()
+        last = datetime.datetime.fromtimestamp(t[-1], zoneinfo.ZoneInfo("America/New_York")).date()
+        if last == today:
+            return [t[:-1]] + [a[:-1] for a in arrays]
+    return [t] + list(arrays)
+
+
+def oneil_market(ctx):
+    """O'Neil's M from SPY (QQQ adds distribution days), on closed bars."""
+    spy, qqq = ctx.get("spy"), ctx.get("qqq")
+    if not spy or not spy.get("v"):
+        return None
+    t, c, v = _closed(spy["t"], spy["c"], spy["v"])
+    c2 = v2 = None
+    if qqq and qqq.get("v"):
+        qd = {int(a // 86400): (b, w) for a, b, w in zip(qqq["t"], qqq["c"], qqq["v"])}
+        al = [qd.get(int(x // 86400)) for x in t]
+        if all(al):
+            c2, v2 = [x[0] for x in al], [x[1] for x in al]
+    st = ON.market_direction(c, v, c2, v2)
+    last = dict(st[-1])
+    if last.get("ftd") is not None:
+        last["ftd_date"] = datetime.datetime.utcfromtimestamp(t[last["ftd"]]).strftime("%Y-%m-%d")
+    last["label"] = ON.M_HE[last["state"]]
+    last["as_of"] = datetime.datetime.utcfromtimestamp(t[-1]).strftime("%Y-%m-%d")
+    return last
+
+
+RS_REF = None
+try:
+    with open(os.path.join(HERE, "research", "rs_reference.json"), encoding="utf-8") as _fh:
+        RS_REF = json.load(_fh)
+except Exception:
+    RS_REF = None
+
+
+def oneil_block(sym, candles, fund=None, sec=None):
+    """O'Neil analysis on closed bars."""
+    t = [x[0] for x in candles]
+    o, h, l, c, v = ([float(x[i] or 0) for x in candles] for i in range(1, 6))
+    t, o, h, l, c, v = _closed(t, o, h, l, c, v)
+    m = market_ctx() or {}
+    spy = FX.align(t, m["spy"]["t"], m["spy"]["c"]) if m.get("spy") else None
+    raw_ = ON.rs_raw(c, len(c) - 1)
+    ref = (RS_REF or {}).get("raw")
+    if not ref:  # no research reference yet: rank among the watchlist bars already loaded
+        ref = [ON.rs_raw([float(x[4]) for x in v_[1]["candles"]], len(v_[1]["candles"]) - 1) for v_ in list(_cache.values())]
+    rs_pct = ON.rs_percentile(raw_, ref)
+    out = ON.analyze(t, o, h, l, c, v, spy, (sec or {}).get("growth"), fund, rs_pct, m.get("oneil_m"))
+    out["rs_ref"] = "%d מניות גדולות (מחקר %s)" % (len(RS_REF["raw"]), RS_REF.get("date", "")) if RS_REF else "רשימת המעקב בלבד"
+    return out
 
 
 def etf_rows(sym):
@@ -881,6 +956,7 @@ def fundamentals(sym):
         "market_cap": raw(pr, "marketCap"), "pe": raw(sd, "trailingPE"), "fwd_pe": raw(sd, "forwardPE") or raw(ks, "forwardPE"),
         "peg": raw(ks, "pegRatio"), "ps": raw(sd, "priceToSalesTrailing12Months"), "pb": raw(ks, "priceToBook"),
         "beta": raw(sd, "beta"), "div_yield": raw(sd, "dividendYield"), "short_pct": raw(ks, "shortPercentOfFloat"),
+        "inst_pct": raw(ks, "heldPercentInstitutions"),
         "eps_ttm": raw(ks, "trailingEps"), "eps_fwd": raw(ks, "forwardEps"),
         "revenue": raw(fd, "totalRevenue"), "rev_growth": raw(fd, "revenueGrowth"), "earn_growth": raw(fd, "earningsGrowth"),
         "gross_margin": raw(fd, "grossMargins"), "op_margin": raw(fd, "operatingMargins"), "net_margin": raw(fd, "profitMargins"),
@@ -1120,6 +1196,12 @@ def analyze(sym, force=False):
     if out["score"]:
         out["decision"]["code"] = out["score"]["code"]
     out["event"] = event_for(sym, base["candles"], out["sec"], out["news"], out["fund"])
+    try:
+        out["oneil"] = oneil_block(sym, base["candles"], out["fund"], out["sec"])
+    except Exception as e:
+        out["oneil"] = None
+        out["errors"].append("ניתוח O'Neil נכשל (%s)" % str(e)[:80])
+    out["market"]["oneil"] = (market_ctx() or {}).get("oneil_m")
     hist, plan2, dec = engine_block(base["tech"], out["fund"], out["sec"], base.get("ext"), out["ind_score"], out["event"])
     if hist is not None:
         out["score_v1"], out["score"], out["plan2"] = out["score"], hist, plan2
@@ -1174,6 +1256,7 @@ def quick(sym, force=False):
                 "tm": {"p_target": tm["p_target"], "lean": tm["lean"]} if tm else None,
                 "score": sc["value"] if sc else None, "score_label": sc["label"] if sc else None, "act": dec["verdict"], "act_code": d2["code"] if t.get("fx") else None,
                 "event": (evq or {}).get("level") if t.get("fx") else None,
+                "on": ((full.get("oneil") if full else None) or {}).get("status"),
                 "p_profit": sc.get("p_profit") if sc else None, "ind": isc["value"] if isc else None,
                 "ext": {k: (a.get("ext") or {}).get(k) for k in ("session", "active", "price", "change", "gap", "volume", "vol_pct")}
                 if (a.get("ext") or {}).get("active") else None}

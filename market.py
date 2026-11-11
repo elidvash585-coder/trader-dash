@@ -83,10 +83,12 @@ def context(fetch, cfg=None):
     """Live context. fetch(sym) -> (meta, rows[(t,o,h,l,c,v)]). Errors leave parts out."""
     out = {"spy": None, "qqq": None, "vix": None, "regime": None, "errors": []}
     data = {}
+    vols = {}
     for s in ("SPY", "QQQ", "^VIX"):
         try:
             _, rows = fetch(s)
             data[s] = ([r[0] for r in rows], [float(r[4]) for r in rows])
+            vols[s] = [float(r[5] or 0) for r in rows]
         except Exception as e:
             out["errors"].append("%s: %s" % (s, str(e)[:60]))
     if "SPY" not in data:
@@ -96,8 +98,8 @@ def context(fetch, cfg=None):
     vix = F.align(t, *data["^VIX"]) if "^VIX" in data else None
     pts, lab = regime_series(spy, qqq, vix, cfg)
     s50, s200 = F.sma(spy, 50), F.sma(spy, 200)
-    out.update(spy={"t": t, "c": spy, "above50": spy[-1] > (s50[-1] or 0), "above200": spy[-1] > (s200[-1] or 0)},
-               qqq={"t": data["QQQ"][0], "c": data["QQQ"][1]} if "QQQ" in data else None,
+    out.update(spy={"t": t, "c": spy, "v": vols.get("SPY"), "above50": spy[-1] > (s50[-1] or 0), "above200": spy[-1] > (s200[-1] or 0)},
+               qqq={"t": data["QQQ"][0], "c": data["QQQ"][1], "v": vols.get("QQQ")} if "QQQ" in data else None,
                vix=round(vix[-1], 2) if vix and vix[-1] else None,
                regime={"code": lab[-1], "label": REGIME_HE.get(lab[-1]), "points": round(pts[-1], 2) if pts[-1] is not None else None,
                        "uses_vix": bool(vix and vix[-1]), "uses_qqq": qqq is not None})

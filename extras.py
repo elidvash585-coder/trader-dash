@@ -188,6 +188,14 @@ def sec_block(sym, ua):
                         "important": bool(set(items) & IMPORTANT),
                         "url": facts.ARCHIVE_URL % (int(cik), acc.replace("-", "")) + rec["primaryDocument"][i]})
     out["filings"] = filings[:8]
+    try:  # quarterly growth as first reported (point in time), for O'Neil's C and A
+        import secpit
+        evs = secpit.growth_events(cf)
+        today = datetime.date.today().isoformat()
+        out["growth"] = secpit.known_at(evs, today)
+        out["growth_hist"] = [{k: e.get(k) for k in ("end", "known", "eps_yoy", "rev_yoy", "eps_ttm_yoy")} for e in evs[-8:]]
+    except Exception as e:
+        out["growth"], out["growth_error"] = None, str(e)[:120]
     return out
 
 

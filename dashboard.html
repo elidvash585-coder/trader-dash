@@ -195,7 +195,7 @@ td.n{font-family:var(--mono);direction:ltr;text-align:left}
       <div class="row static-hide"><input id="addInp" placeholder="הוסף טיקר (MSFT)" onkeydown="if(event.key==='Enter')addSym()"><button onclick="addSym()">+</button></div>
       <div class="row" style="justify-content:space-between">
         <div class="flt" id="flt"></div>
-        <select id="sortSel" onchange="state.sort=this.value;renderWL()"><option value="list">סדר שלי</option><option value="dec">לפי ציון היסטורי</option><option value="ind">לפי ציון אינדיקטורים</option><option value="act">לפי החלטה</option><option value="both">לפי ממוצע שניהם</option><option value="chg">לפי שינוי</option><option value="ext">לפי pre-market</option><option value="sym">א-ב</option></select>
+        <select id="sortSel" onchange="state.sort=this.value;renderWL()"><option value="list">סדר שלי</option><option value="dec">לפי ציון היסטורי</option><option value="ind">לפי ציון אינדיקטורים</option><option value="act">לפי החלטה</option><option value="on">לפי O'Neil</option><option value="both">לפי ממוצע שניהם</option><option value="chg">לפי שינוי</option><option value="ext">לפי pre-market</option><option value="sym">א-ב</option></select>
       </div>
     </div>
     <div class="wlcols"><span>מניה</span><span style="text-align:left">מחיר</span><span style="text-align:center" title="ציון מההיסטוריה (נבדק לאחור)">היסטורי</span><span style="text-align:center" title="ציון אינדיקטורים (משקל שווה, לא נבדק)">אינד׳</span></div>
@@ -217,7 +217,7 @@ td.n{font-family:var(--mono);direction:ltr;text-align:left}
 
 <script>
 const $=s=>document.querySelector(s);
-const state={rows:[],sel:null,data:null,range:'1Y',ind:'cci',sma:true,chan:true,avwap:false,vp:false,filter:'all',sort:'list'};
+const state={rows:[],sel:null,data:null,range:'1Y',ind:'cci',sma:true,chan:false,avwap:false,vp:false,on:true,filter:'all',sort:'list'};
 const fmt=(x,d=2)=>x==null||isNaN(x)?'—':Number(x).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
 const pct=(x,d=2)=>x==null?'—':(x>0?'+':'')+fmt(x,d)+'%';
 const cls=x=>x==null||isNaN(x)?'':x>=0?'up':'down';
@@ -266,6 +266,7 @@ function renderWL(){
   const rank={go:0,wait:1,no:2};
   if(state.sort==='dec')rows=[...rows].sort((a,b)=>(b.score??-1)-(a.score??-1));
   if(state.sort==='act'){const o={go:0,wait:1,watch:2,exposure:3};rows=[...rows].sort((a,b)=>((o[a.act_code]??4)-(o[b.act_code]??4))||((b.score??-1)-(a.score??-1))||((b.ind??-1)-(a.ind??-1)))}
+  if(state.sort==='on'){const o={buy_zone:0,near_pivot:1,forming:2,extended:3,no_base_high:4,no_base:5,failed:6,stopped:7,downtrend:8};rows=[...rows].sort((a,b)=>(o[a.on]??9)-(o[b.on]??9))}
   if(state.sort==='ind')rows=[...rows].sort((a,b)=>(b.ind??-1)-(a.ind??-1));
   if(state.sort==='both')rows=[...rows].sort((a,b)=>((b.score??0)+(b.ind??0))-((a.score??0)+(a.ind??0)));
   if(state.sort==='chg')rows=[...rows].sort((a,b)=>(b.change_1d??-99)-(a.change_1d??-99));
@@ -296,7 +297,7 @@ function renderHeader(){const d=state.data,t=d.tech,f=d.fund||{};const c=d.candl
   <span class="px">${fmt(t.price)}</span><span class="chg ${cls(t.change_1d)}">${pct(t.change_1d)}</span>${d.ext&&d.ext.active?`<span class="extpill">${d.ext.label} <b>${fmt(d.ext.price)}</b><span class="num ${cls(d.ext.change)}">${pct(d.ext.change)}</span></span>`:''}
   <span class="num dim" style="font-size:11.5px">O ${fmt(c[1])} H ${fmt(c[2])} L ${fmt(c[3])} · Vol ${big(c[5])}</span><span class="sp"></span>
   <div class="tb">${['3M','6M','1Y','2Y'].map(r=>`<button class="${state.range===r?'on':''}" onclick="state.range='${r}';renderHeader();drawChart();drawInd()">${r}</button>`).join('')}<span class="sep"></span>
-  <button class="${state.sma?'on':''}" onclick="state.sma=!state.sma;renderHeader();drawChart()">ממוצעים</button><button class="${state.chan?'on':''}" onclick="state.chan=!state.chan;renderHeader();drawChart()">תעלה</button>${(t.overlays||{}).avwap_low?`<button class="${state.avwap?'on':''}" title="VWAP מעוגן משפל מאושר ומהשיא השנתי (מנרות יומיים, קירוב)" onclick="state.avwap=!state.avwap;renderHeader();drawChart()">AVWAP</button>`:''}${(t.overlays||{}).vprofile?`<button class="${state.vp?'on':''}" title="פרופיל נפח משוער מנרות יומיים: POC ואזור הערך" onclick="state.vp=!state.vp;renderHeader();drawChart()">פרופיל ≈</button>`:''}</div>`;
+  <button class="${state.sma?'on':''}" onclick="state.sma=!state.sma;renderHeader();drawChart()">ממוצעים</button>${d.oneil&&d.oneil.base?`<button class="${state.on?'on':''}" title="הבסיס, ה-pivot, אזור הקנייה והסטופ לפי O'Neil" onclick="state.on=!state.on;renderHeader();drawChart()">O'Neil</button>`:''}<button class="${state.chan?'on':''}" onclick="state.chan=!state.chan;renderHeader();drawChart()">תעלה</button>${(t.overlays||{}).avwap_low?`<button class="${state.avwap?'on':''}" title="VWAP מעוגן משפל מאושר ומהשיא השנתי (מנרות יומיים, קירוב)" onclick="state.avwap=!state.avwap;renderHeader();drawChart()">AVWAP</button>`:''}${(t.overlays||{}).vprofile?`<button class="${state.vp?'on':''}" title="פרופיל נפח משוער מנרות יומיים: POC ואזור הערך" onclick="state.vp=!state.vp;renderHeader();drawChart()">פרופיל ≈</button>`:''}</div>`;
   $('#indTabs').innerHTML=[['cci','CCI 20'],['rsi','RSI 14'],['macd','MACD'],['obv','OBV']].map(([k,l])=>`<button class="${state.ind===k?'on':''}" onclick="state.ind='${k}';renderHeader();drawInd()">${l}</button>`).join('')+`<span class="sep"></span><span class="num dim" style="font-size:11.5px">${state.ind==='cci'?'CCI '+fmt(t.cci,1):state.ind==='rsi'?'RSI '+fmt(t.rsi,1):state.ind==='macd'?'MACD '+fmt(t.macd,3)+' / '+fmt(t.macd_signal,3):''}</span>`}
 
 function meter(label,val,lo,hi,ticks,cl,txt){const x=Math.max(0,Math.min(100,((val||0)-lo)/(hi-lo)*100));
@@ -323,7 +324,7 @@ function renderInfo(){const d=state.data,t=d.tech,ch=t.channel,dc=d.decision,p=d
   const up=a.mean?(a.mean/t.price-1)*100:null;const dist=x=>pct((x/t.price-1)*100,1);const col=dc.code==='go'?'#26c99a':dc.code==='wait'?'#f5b041':'#5d6780';
   let h=(d.errors||[]).map(e=>`<div class="err">${e}</div>`).join('')+evSec(d);
   const sc=d.score;
-  const rg=(d.market||{}).regime;if(rg&&rg.label)$('#regime').innerHTML=`שוק: <b style="color:${rg.code==='on'?'var(--up)':rg.code==='off'?'var(--down)':'var(--warn)'}">${rg.label}</b>`;$('#regime').title=rg&&rg.label?`נקודות ${rg.points}${d.market.vix?' · VIX '+d.market.vix:''} · SPY/QQQ מול ממוצעים 50/200`:'';
+  const rg=(d.market||{}).regime,mo=(d.market||{}).oneil;if(rg&&rg.label)$('#regime').innerHTML=`שוק: <b style="color:${rg.code==='on'?'var(--up)':rg.code==='off'?'var(--down)':'var(--warn)'}">${rg.label}</b>${mo?` · O'Neil: <b style="color:${mo.state==='uptrend'?'var(--up)':mo.state==='pressure'||mo.state==='rally'?'var(--warn)':'var(--down)'}">${mo.label}</b>`:''}`;$('#regime').title=rg&&rg.label?`נקודות ${rg.points}${d.market.vix?' · VIX '+d.market.vix:''} · SPY/QQQ מול ממוצעים 50/200`:'';
   if(sc&&sc.version==='v2'){const c=sc.value==null?'var(--dim)':scCol(sc.value),dcol={go:'var(--up)',wait:'var(--warn)',watch:'var(--mute)',exposure:'var(--down)'}[dc.code]||'var(--mute)',m=sc.meta||{};
   h+=`<div class="sec"><div class="dec" style="border-color:${c};background:linear-gradient(135deg,color-mix(in srgb,${c} 16%,transparent),transparent)"><div class="v"><div><div class="mute" style="font-size:12px">ציון 1: מההיסטוריה (נבדק לאחור)</div><b style="color:${c}">${sc.label}</b></div>
      ${sc.value==null?'<b class="num" style="font-size:22px;color:var(--dim)">N/A</b>':ring(sc.value,c)}</div>
@@ -347,6 +348,7 @@ function renderInfo(){const d=state.data,t=d.tech,ch=t.channel,dc=d.decision,p=d
      <p>${dc.action}</p>${(dc.ext_alerts||[]).some(a=>a.level!=='info')?'<p class="warn" style="font-size:12px;margin-top:6px">⚠ יש התראת '+(d.ext.session==='pre'?'pre-market':'after-hours')+', ראה למטה.</p>':''}
      <p class="dim" style="font-size:11.5px;margin-top:8px">בבדיקה לאחור (${ev.test_n?ev.test_n.toLocaleString():'—'} עסקאות מ-${ev.test_from||''}): ${fmt(ev.test_win,0)}% הצלחה, ממוצע ${ev.test_R>0?'+':''}${fmt(ev.test_R)}R לעסקה, ${ev.test_edge>0?'+':''}${fmt(ev.test_edge)}R מעל קנייה ביום אקראי. התוצאה חיובית אבל לא מובהקת סטטיסטית.</p></div></div>`;
   }
+  h+=oneilSec(d);
   h+=`${extSec(d)}
   <div class="sec"><h4>${dc.version==='v2'?`תנאי כניסה <span class="dim" style="font-weight:400">${dc.items.filter(i=>i.ok===true).length} מתוך ${dc.items.length} מתקיימים${dc.unknown?`, ${dc.unknown} בלי מספיק נתונים`:''}</span>`:'תיאור מצב <span class="dim" style="font-weight:400">בבדיקה לאחור הכללים האלה לא שיפרו תחזית</span>'}</h4><ul class="chk">${dc.items.map(i=>`<li class="${i.ok===true?'ok':i.ok===false?'bad':'neu'}"><i title="${i.ok===null?'אין מספיק נתונים':''}">${i.ok===true?'✓':i.ok===false?'✕':'?'}</i><span>${i.label}<small>${i.detail}</small></span></li>`).join('')}</ul></div>
   ${tmSec(d)}
@@ -372,6 +374,18 @@ function renderInfo(){const d=state.data,t=d.tech,ch=t.channel,dc=d.decision,p=d
   ${a.mean?`<div class="sec"><h4>אנליסטים</h4><div class="kvs"><div><label>המלצה</label><b style="font-family:Heebo">${REC[a.key]||'—'}</b></div><div><label>יעד ממוצע</label><b>${fmt(a.mean)} <span class="${cls(up)}">${pct(up,0)}</span></b></div></div></div>`:''}`;
   h+=advSec(d);
   $('#info').innerHTML=h}
+function oneilSec(d){const o=d.oneil;if(!o||o.status==='short')return '';const b=o.base,m=o.market||{};
+  const col={buy_zone:'var(--up)',near_pivot:'var(--warn)',forming:'var(--mute)',extended:'var(--warn)',failed:'var(--down)',stopped:'var(--down)',downtrend:'var(--down)'}[o.status]||'var(--mute)';
+  const ck=o.canslim||[],ok=ck.filter(i=>i.ok===true).length,unk=ck.filter(i=>i.ok===null).length;
+  return `<div class="sec"><h4>ניתוח O'Neil <span class="dim" style="font-weight:400">How to Make Money in Stocks · CAN SLIM ${ok}/7${unk?`, ${unk} לא ניתנים למדידה`:''}</span></h4>
+   <div style="padding:8px 10px;border-radius:8px;border-right:3px solid ${col};background:rgba(255,255,255,.03);font-size:12.5px;line-height:1.5"><b style="color:${col}">${b?b.type_he:'אין בסיס'}</b> · ${o.status_he}</div>
+   ${b?`<div class="kvs" style="margin-top:8px"><div><label>Pivot · אזור קנייה</label><b style="color:#ff9f1c">${fmt(o.pivot)} – ${fmt(o.buy_zone[1])}</b></div><div><label>סטופ (-8%)</label><b class="down">${fmt(o.stop)}</b></div>
+     <div><label>יעדי מימוש (+20/25%)</label><b class="up">${fmt(o.targets[0])} / ${fmt(o.targets[1])}</b></div><div><label>בסיס: עומק · משך · שלב</label><b>${fmt(b.depth,0)}% · ${fmt(b.weeks,0)} שב' · ${b.stage}</b></div>
+     ${b.handle?`<div><label>ידית: עומק · נפח</label><b>${fmt(b.handle.depth,0)}% · ${b.handle.volume_dry?'מתייבש':'לא מתייבש'}</b></div>`:''}<div><label>מרחק מה-pivot</label><b class="${cls(o.dist_pivot)}">${o.dist_pivot>0?'+':''}${fmt(o.dist_pivot,1)}%</b></div></div>`:''}
+   <div class="kvs" style="margin-top:8px"><div><label>RS Rating</label><b class="${o.rs_pct>=80?'up':o.rs_pct!=null&&o.rs_pct<50?'down':''}" title="מדורג מול ${o.rs_ref}">${o.rs_pct??'—'}${o.rs_line?` <small class="dim">${o.rs_line.at_high?'קו RS בשיא':'קו RS '+fmt(o.rs_line.vs_high,0)+'%'}</small>`:''}</b></div><div><label>איסוף/פיזור · משיא שנתי</label><b>${o.acc?o.acc.grade:'—'} · -${fmt(o.near_high,0)}%</b></div></div>
+   <ul class="chk" style="margin-top:8px">${ck.map(i=>`<li class="${i.ok===true?'ok':i.ok===false?'bad':'neu'}"><i title="${i.ok===null?'לא ניתן למדידה מהנתונים':''}">${i.ok===true?'✓':i.ok===false?'✕':'?'}</i><span>${i.label}<small>${i.detail}</small></span></li>`).join('')}</ul>
+   ${(o.sell||[]).length?`<div class="al" style="margin-top:8px">${o.sell.map(x=>`<div class="warn">${x}</div>`).join('')}</div>`:''}
+   <p class="dim" style="font-size:11px;margin-top:8px">כללי הספר על נרות יומיים סגורים (5 ימי מסחר = שבוע). RS מדורג מול ${o.rs_ref}, ולכן הוא קירוב ל-RS של IBD. ${(window.ON_RESEARCH||'')}</p></div>`}
 function evSec(d){const e=d.event;if(!e)return'';const crit=e.level==='critical',c=crit?'var(--down)':'var(--warn)';
   const vc=e.verify==='מאומת'?'var(--up)':e.verify.startsWith('מדווח')?'var(--warn)':'var(--down)';
   return `<div class="sec"><div class="evb" style="border-color:${c};background:color-mix(in srgb,${c} 10%,transparent)">
@@ -536,14 +550,18 @@ const LG={sma20:['#f5b041','ממוצע 20','ממוצע נע של 20 ימי המ�
  avh:['#c77dff','AVWAP שיא','אותו חישוב מאז השיא השנתי. מחיר מתחתיו = רוב מי שקנה מאז השיא בהפסד, ולכן ייתכן לחץ מכירה כשהמחיר מתקרב אליו.'],
  poc:['#f5b041','≈POC','המחיר שבו נסחר הכי הרבה נפח ב-120 הימים האחרונים. זה אומדן מנרות יומיים, לא נתון מדויק.'],
  va:['rgba(245,176,65,.6)','≈VAH / ≈VAL','הגבול העליון והתחתון של האזור שבו נסחרו כ-70% מהנפח באותה תקופה (אומדן).',1],
- vol:['rgba(138,148,168,.6)','נפח','עמודות הנפח היומי בתחתית הגרף: ירוק ביום עלייה, אדום ביום ירידה.']};
+ vol:['rgba(138,148,168,.6)','נפח','עמודות הנפח היומי בתחתית הגרף: ירוק ביום עלייה, אדום ביום ירידה.'],
+ onb:['rgba(255,255,255,.45)','בסיס (O\'Neil)','הגבול העליון והתחתון של הבסיס האחרון: האזור שבו המניה התבססה לפני מהלך. אצל O\'Neil בסיס תקין נמשך לפחות 5-7 שבועות ועמוק עד 33%.',1],
+ onp:['#ff9f1c','Pivot','נקודת הקנייה של O\'Neil: הגבוה של הבסיס (או של הידית) ועוד 10 סנט. קנייה רק בסגירה מעליו בנפח של 40% ומעלה מעל הממוצע.'],
+ onz:['rgba(255,159,28,.55)','+5% (אזור קנייה)','עד 5% מעל ה-pivot. מעל זה המניה "מתוחה", ולפי הספר לא רודפים אחריה.',1],
+ ons:['#f0506e','-8% (סטופ)','כלל ההפסד של O\'Neil: לחתוך כל הפסד ב-7-8% מתחת למחיר הקנייה, בלי יוצאים מן הכלל.']};
 const IND_HELP={cci:'CCI 20: מודד כמה המחיר רחוק מהממוצע שלו. מעל 100 מומנטום חזק, מתחת ל-100- חולשה או מכירת יתר.',
  rsi:'RSI 14: עוצמת העליות מול הירידות ב-14 ימים, בין 0 ל-100. מעל 70 קנייה ביתר, מתחת ל-30 מכירת יתר (המצב שנבדק במחקר).',
  macd:'MACD: ההפרש בין ממוצע 12 לממוצע 26 (הקו), מול ממוצע 9 שלו (קו האות). חציה של הקו מעל קו האות = מומנטום מתחזק.',
  obv:'OBV: נפח מצטבר, מוסיף את הנפח בימי עלייה ומפחית בימי ירידה. OBV עולה = יותר נפח בימי עלייה.'};
 function renderLegend(){const d=state.data;if(!d)return;const t=d.tech,ov=t.overlays||{},k=[];
   if(state.sma)k.push('sma20','sma50','sma200');if(state.chan)k.push('chan');k.push('sup','res');if(d.plan)k.push('entry');if(d.ext&&d.ext.active)k.push('ext');
-  if(state.avwap){if(ov.avwap_low)k.push('avl');if(ov.avwap_high)k.push('avh')}if(state.vp&&ov.vprofile)k.push('poc','va');k.push('vol');
+  if(state.on&&d.oneil&&d.oneil.base)k.push('onb','onp','onz','ons');if(state.avwap){if(ov.avwap_low)k.push('avl');if(ov.avwap_high)k.push('avh')}if(state.vp&&ov.vprofile)k.push('poc','va');k.push('vol');
   $('#legend').innerHTML=k.map(x=>`<span class="${LG[x][3]?'dash':''}" style="--c:${LG[x][0]}" title="${LG[x][2]}">${LG[x][1]}</span>`).join('')+`<button onclick="state.lgHelp=!state.lgHelp;drawChart();drawInd()">${state.lgHelp?'סגור הסבר':'ⓘ מה כל קו?'}</button>`;
   const hp=$('#lgHelp');hp.hidden=!state.lgHelp;
   if(state.lgHelp)hp.innerHTML=k.map(x=>`<div class="${LG[x][3]?'dash':''}" style="--c:${LG[x][0]}"><b>${LG[x][1]}:</b> ${LG[x][2]}</div>`).join('')+`<div style="--c:var(--mute)"><b>גרף תחתון:</b> ${IND_HELP[state.ind]||''}</div>`}
@@ -556,7 +574,13 @@ function drawChart(){const d=state.data;if(!d)return;renderLegend();const el=$('
   vol.setData(d.candles.filter(x=>x[0]>=cut).map(x=>({time:x[0],value:x[5],color:x[4]>=x[1]?'rgba(38,201,154,.3)':'rgba(240,80,110,.3)'})));
   if(state.sma)[['sma20','#f5b041'],['sma50','#3d7bfd'],['sma200','#8c63ff']].forEach(([k,c])=>mainC.addLineSeries({color:c,lineWidth:1.5,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false}).setData(F(s[k])));
   if(state.chan){const L=t.channel.lines;[['upper',0],['mid',2],['lower',0]].forEach(([k,st])=>mainC.addLineSeries({color:'rgba(51,198,240,.85)',lineWidth:k==='mid'?1:2,lineStyle:st,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false}).setData(L[k].map(x=>({time:x[0],value:x[1]}))))}
-  const ov=t.overlays||{};
+  const ov=t.overlays||{},on=d.oneil;
+  if(state.on&&on&&on.base){const b=on.base,seg=(y,c,st)=>mainC.addLineSeries({color:c,lineWidth:1,lineStyle:st,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false}).setData([{time:b.t_start,value:y},{time:b.t_end,value:y}]);
+    if(b.t_start>=cut){seg(b.high,'rgba(255,255,255,.45)',2);seg(b.low,'rgba(255,255,255,.45)',2)}
+    cs.createPriceLine({price:on.pivot,color:'#ff9f1c',lineWidth:2,lineStyle:0,title:'Pivot'});
+    cs.createPriceLine({price:on.buy_zone[1],color:'rgba(255,159,28,.55)',lineWidth:1,lineStyle:2,title:'+5%'});
+    cs.createPriceLine({price:on.stop,color:'#f0506e',lineWidth:1,lineStyle:1,title:'-8%'});
+    if(on.breakout&&on.breakout.t>=cut)cs.setMarkers([{time:on.breakout.t,position:'belowBar',color:'#ff9f1c',shape:'arrowUp',text:'פריצה x'+fmt(on.breakout.vol_ratio,1)}])}
   if(state.avwap)[['avwap_low','#e9a23b','AVWAP שפל'],['avwap_high','#c77dff','AVWAP שיא']].forEach(([k,c])=>{if(ov[k])mainC.addLineSeries({color:c,lineWidth:1.5,lineStyle:0,priceLineVisible:false,lastValueVisible:true,title:'',crosshairMarkerVisible:false}).setData(F(ov[k].series))});
   if(state.vp&&ov.vprofile){const v=ov.vprofile;[[v.poc,'≈POC','#f5b041',0],[v.va_high,'≈VAH','rgba(245,176,65,.6)',2],[v.va_low,'≈VAL','rgba(245,176,65,.6)',2]].forEach(([pr,ti,co,ls])=>cs.createPriceLine({price:pr,color:co,lineWidth:1,lineStyle:ls,title:ti}))}
   t.support.forEach((x,i)=>cs.createPriceLine({price:x.price,color:'rgba(38,201,154,.55)',lineWidth:1,lineStyle:2,title:'S'+(i+1)}));
