@@ -1,6 +1,6 @@
 {
  "version": "v2",
- "generated": "2026-11-11 16:55 UTC",
+ "generated": "2026-11-11 17:04 UTC",
  "stocks": 87,
  "from": "2017-11-13",
  "to": "2026-10-28",
@@ -105,7 +105,7 @@
     0.087
    ],
    "val_edge": 0.031,
-   "test_edge": 0.024,
+   "test_edge": 0.025,
    "val_n": 12613,
    "test_n": 2951,
    "profit": 38.1,
