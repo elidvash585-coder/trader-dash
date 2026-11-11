@@ -207,7 +207,8 @@ def distribution_days(c, v, i, n=25):
 def market_direction(c, v, c2=None, v2=None):
     """O'Neil's M, as a state machine over the index history (SPY; QQQ adds distribution days).
     states: uptrend (confirmed), pressure (uptrend with 4+ distribution days), correction, rally (attempt).
-    Correction: 6+ distribution days, or the index 8 % under its 50-day high and below its 50-day line.
+    Correction: the index below its 50-day line AND either 8 % under its 50-day high or 6+ distribution days
+    (distribution without price damage only puts the uptrend "under pressure", as IBD does).
     Follow-through day: day 4 or later of a rally attempt, index up >= 1.25 % on higher volume than the day
     before -> confirmed uptrend. Undercutting the rally low restarts the attempt. Returns a list of states."""
     s50 = FX.sma(c, 50)
@@ -219,7 +220,10 @@ def market_direction(c, v, c2=None, v2=None):
             d = max(d, len(distribution_days(c2, v2, i)))
         if st in ("uptrend", "pressure"):
             hi50 = max(c[max(0, i - 50):i + 1])
-            if d >= 6 or (s50[i] and c[i] < s50[i] and c[i] <= hi50 * 0.92):
+            # a correction needs price damage: 8 % under the 50-day high below the 50-day line, or a heavy
+            # distribution cluster (6+) WITH the index under its 50-day line. Distribution alone = "pressure".
+            below50 = bool(s50[i] and c[i] < s50[i])
+            if below50 and (c[i] <= hi50 * 0.92 or d >= 6):
                 st, low, day1 = "correction", c[i], None
             else:
                 st = "pressure" if d >= 4 else "uptrend"
