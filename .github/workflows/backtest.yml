@@ -19,7 +19,7 @@ jobs:
       - name: Unit tests
         run: python -m unittest discover -s tests -v
       - name: Research v2 (walk-forward, strategies, Quality Growth from SEC point-in-time)
-        run: python backtest4.py
+        run: python backtest4.py && python backtest5_oneil.py
         env:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
       - name: Save the results in the repository
