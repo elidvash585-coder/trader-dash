@@ -139,6 +139,21 @@ class FollowThroughResets(unittest.TestCase):
         self.assertEqual(st[-1]["state"], "uptrend")
 
 
+class FtdOnEitherIndex(unittest.TestCase):
+    def test_qqq_follow_through_counts(self):
+        c = [100 + i * 0.1 for i in range(80)]
+        c += [c[-1] * (1 - 0.01 * k) for k in range(1, 13)]
+        low = c[-1]
+        c += [low * 1.003, low * 1.006, low * 1.008, low * 1.008 * 1.005]   # SPY: day 4 only +0.5 %
+        v = [1e8] * len(c)
+        c2 = [x * 1.0 for x in c]
+        c2[-1] = c2[-2] * 1.02                                             # QQQ: +2 % on day 4
+        v2 = [1e8] * len(c)
+        v2[-1] = 1.3e8
+        self.assertNotEqual(ON.market_direction(c, v)[-1]["state"], "uptrend")
+        self.assertEqual(ON.market_direction(c, v, c2, v2)[-1]["state"], "uptrend")
+
+
 class Canslim(unittest.TestCase):
     def test_unknowns_are_none_not_false(self):
         items = ON.canslim()
