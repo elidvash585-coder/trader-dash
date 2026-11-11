@@ -4,7 +4,7 @@ Used by the research (backtest4/5) and by the live site, so both read the number
 - each quarter's value is the FIRST one reported (a restatement filed later was not known before),
 - usable from the day after the filing date,
 - Q4 = annual value minus Q1..Q3, known when the 10-K was filed.
-EPS uses diluted EPS (USD/shares); when a company does not report it, net income is used for growth.
+Earnings growth uses net income (split-proof); diluted EPS only when net income is missing.
 """
 import datetime
 
@@ -59,12 +59,14 @@ def growth_events(cf):
     {"known": date the value became usable, "end": quarter end, "eps_yoy", "rev_yoy", "eps_ttm_yoy",
      "eps_pos", "rev_yoy_prev": [...the two quarters before], "margin", "margin_prev"}"""
     rev = pit_quarters(cf, REVENUE)
-    eps = pit_quarters(cf, EPS, "USD/shares")
-    basis = "eps"
+    # Growth is measured on NET INCOME: per-share figures as first reported are not split-adjusted, so a
+    # 10-for-1 split would look like a 90 % earnings collapse. EPS is the fallback when net income is missing.
+    eps = pit_quarters(cf, NET_INCOME)
+    basis = "net_income"
     if len(eps) < 8:
-        ni = pit_quarters(cf, NET_INCOME)
-        if len(ni) > len(eps):     # only switch when net income actually has more history
-            eps, basis = ni, "net_income"
+        e2 = pit_quarters(cf, EPS, "USD/shares")
+        if len(e2) > len(eps):
+            eps, basis = e2, "eps"
     op = pit_quarters(cf, OPERATING)
     ends = sorted(set(rev) | set(eps))
     out = []
