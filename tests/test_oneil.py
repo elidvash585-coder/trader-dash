@@ -139,6 +139,18 @@ class FollowThroughResets(unittest.TestCase):
         self.assertEqual(st[-1]["state"], "uptrend")
 
 
+class SplitSafeGrowth(unittest.TestCase):
+    def test_split_does_not_fake_an_earnings_collapse(self):
+        import secpit
+        f = lambda s, e, v, filed: {"start": s, "end": e, "val": v, "filed": filed, "form": "10-Q"}
+        q = [("2024-01-01", "2024-03-31", "2024-05-01"), ("2025-01-01", "2025-03-31", "2025-05-01")]
+        ni = [f(a, b, x, c) for (a, b, c), x in zip(q, [100e6, 130e6])]          # net income +30 %
+        eps = [f(a, b, x, c) for (a, b, c), x in zip(q, [10.0, 1.3])]            # a 10:1 split in between
+        cf = {"facts": {"us-gaap": {"NetIncomeLoss": {"units": {"USD": ni}}, "EarningsPerShareDiluted": {"units": {"USD/shares": eps}}}}}
+        ev = secpit.known_at(secpit.growth_events(cf), "2025-06-01")
+        self.assertAlmostEqual(ev["eps_yoy"], 0.30)
+
+
 class FtdOnEitherIndex(unittest.TestCase):
     def test_qqq_follow_through_counts(self):
         c = [100 + i * 0.1 for i in range(80)]
@@ -182,6 +194,7 @@ class PointInTimeGrowth(unittest.TestCase):
         rev = [f(a, b, x, c) for (a, b, c), x in zip(q, [100, 100, 140, 115])]
         eps.append(f("2025-01-01", "2025-03-31", 9.9, "2026-02-01"))   # a later restatement: ignored
         cf = {"facts": {"us-gaap": {"EarningsPerShareDiluted": {"units": {"USD/shares": eps}}, "Revenues": {"units": {"USD": rev}}}}}
+        # no net income in this filing set -> EPS is the fallback
         ev = secpit.growth_events(cf)
         self.assertIsNone(secpit.known_at(ev, "2025-05-01"))             # filed that day: usable from the next
         e1 = secpit.known_at(ev, "2025-05-02")
