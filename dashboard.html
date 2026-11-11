@@ -385,7 +385,9 @@ function oneilSec(d){const o=d.oneil;if(!o||o.status==='short')return '';const b
    <div class="kvs" style="margin-top:8px"><div><label>RS Rating</label><b class="${o.rs_pct>=80?'up':o.rs_pct!=null&&o.rs_pct<50?'down':''}" title="מדורג מול ${o.rs_ref}">${o.rs_pct??'—'}${o.rs_line?` <small class="dim">${o.rs_line.at_high?'קו RS בשיא':'קו RS '+fmt(o.rs_line.vs_high,0)+'%'}</small>`:''}</b></div><div><label>איסוף/פיזור · משיא שנתי</label><b>${o.acc?o.acc.grade:'—'} · -${fmt(o.near_high,0)}%</b></div></div>
    <ul class="chk" style="margin-top:8px">${ck.map(i=>`<li class="${i.ok===true?'ok':i.ok===false?'bad':'neu'}"><i title="${i.ok===null?'לא ניתן למדידה מהנתונים':''}">${i.ok===true?'✓':i.ok===false?'✕':'?'}</i><span>${i.label}<small>${i.detail}</small></span></li>`).join('')}</ul>
    ${(o.sell||[]).length?`<div class="al" style="margin-top:8px">${o.sell.map(x=>`<div class="warn">${x}</div>`).join('')}</div>`:''}
-   <p class="dim" style="font-size:11px;margin-top:8px">כללי הספר על נרות יומיים סגורים (5 ימי מסחר = שבוע). RS מדורג מול ${o.rs_ref}, ולכן הוא קירוב ל-RS של IBD. ${(window.ON_RESEARCH||'')}</p></div>`}
+   <p class="dim" style="font-size:11px;margin-top:8px">כללי הספר על נרות יומיים סגורים (5 ימי מסחר = שבוע). RS מדורג מול ${o.rs_ref}, ולכן הוא קירוב ל-RS של IBD. ${o.research?onRes(o.research):''}</p></div>`}
+function onRes(r){const f=x=>x&&x.n?`${x.n} עסקאות, ${x.exp>0?'+':''}${fmt(x.exp,2)}R, ${x.edge>0?'+':''}${fmt(x.edge,2)}R מעל יום אקראי${x.ci&&x.ci[0]!=null?` [${fmt(x.ci[0],2)}, ${fmt(x.ci[1],2)}]`:''}`:'אין מספיק עסקאות';
+  return `בדיקה לאחור על ${r.stocks} מניות גדולות, ${r.from}–${r.to}: פריצה מבסיס בלבד: ${f(r.on1)}. עם RS 80+: ${f(r.on2)}. עם RS 80+ ושוק במגמה עולה: ${f(r.on3)}. CAN SLIM מלא: ${f(r.on4)}. אף אחד לא מובהק סטטיסטית, ולכן לא משפיע על הציונים.`}
 function evSec(d){const e=d.event;if(!e)return'';const crit=e.level==='critical',c=crit?'var(--down)':'var(--warn)';
   const vc=e.verify==='מאומת'?'var(--up)':e.verify.startsWith('מדווח')?'var(--warn)':'var(--down)';
   return `<div class="sec"><div class="evb" style="border-color:${c};background:color-mix(in srgb,${c} 10%,transparent)">
