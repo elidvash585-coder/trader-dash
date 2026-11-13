@@ -1,24 +1,130 @@
 {
- "generated": "2026-11-11 18:27 UTC",
+ "by_market": {
+  "ON1|uptrend": {
+   "n": 959,
+   "n_eff": 839,
+   "win": 31.3,
+   "expectancy": -0.199,
+   "edge": -0.211,
+   "edge_ci": [
+    -0.369,
+    -0.051
+   ]
+  },
+  "ON1|pressure": {
+   "n": 959,
+   "n_eff": 831,
+   "win": 36.5,
+   "expectancy": -0.023,
+   "edge": -0.07,
+   "edge_ci": [
+    -0.188,
+    0.055
+   ]
+  },
+  "ON1|rally": {
+   "n": 425,
+   "n_eff": 350,
+   "win": 35.8,
+   "expectancy": -0.075,
+   "edge": -0.188,
+   "edge_ci": [
+    -0.411,
+    0.022
+   ]
+  },
+  "ON1|correction": {
+   "n": 129,
+   "n_eff": 121,
+   "win": 34.9,
+   "expectancy": -0.087,
+   "edge": -0.204,
+   "edge_ci": [
+    -0.601,
+    0.157
+   ]
+  },
+  "ON2|uptrend": {
+   "n": 429,
+   "n_eff": 389,
+   "win": 32.9,
+   "expectancy": -0.122,
+   "edge": -0.134,
+   "edge_ci": [
+    -0.355,
+    0.15
+   ]
+  },
+  "ON2|pressure": {
+   "n": 317,
+   "n_eff": 302,
+   "win": 36.0,
+   "expectancy": 0.042,
+   "edge": -0.005,
+   "edge_ci": [
+    -0.235,
+    0.226
+   ]
+  },
+  "ON2|rally": {
+   "n": 213,
+   "n_eff": 182,
+   "win": 38.0,
+   "expectancy": 0.026,
+   "edge": -0.088,
+   "edge_ci": [
+    -0.429,
+    0.267
+   ]
+  },
+  "ON2|correction": {
+   "n": 54,
+   "n_eff": 51,
+   "win": 33.3,
+   "expectancy": 0.07,
+   "edge": -0.048,
+   "edge_ci": [
+    -0.528,
+    0.418
+   ]
+  }
+ },
+ "per_stock": {
+  "ON1": {
+   "stocks": 1155,
+   "mean_of_stock_means": -0.124,
+   "median_stock": -0.67,
+   "share_stocks_positive": 36.1,
+   "trades_per_stock_median": 2.0
+  },
+  "ON2": {
+   "stocks": 681,
+   "mean_of_stock_means": -0.06,
+   "median_stock": -1.018,
+   "share_stocks_positive": 36.6,
+   "trades_per_stock_median": 1.0
+  }
+ },
+ "generated": "2026-11-13 09:01 UTC",
  "demo": false,
  "universe": 5583,
- "stocks_with_bars": 5195,
+ "stocks_with_bars": 5198,
  "stocks_with_breakouts": 1155,
- "sec_stocks": 678,
- "from": "2018-01-24",
- "to": "2026-11-09",
+ "sec_stocks": 679,
+ "from": "2018-01-25",
+ "to": "2026-11-10",
  "test_from": "2025-04-03",
  "filters": {
   "min_price": 10.0,
   "min_dollar_volume_50d": 10000000.0
  },
- "base_all": 0.058,
+ "base_all": 0.053,
  "variants": {
   "ON1 פריצה מבסיס (טכני)": {
    "all": {
-    "n": 2474,
-    "n_eff": 2001,
-    "win": 34.2,
+    "n": 2472,
+    "n_eff": 1998,
+    "win": 34.3,
     "target": 11.5,
     "stop": 58.4,
     "ambiguous": 0.0,
@@ -28,15 +134,15 @@
     "ret_mean": -0.73,
     "ret_median": -8.05,
     "days": 36.5,
-    "max_dd_R": 354.5,
+    "max_dd_R": 350.4,
     "sharpe_m": -0.5,
     "sortino_m": -0.52,
     "exp_ci": [
-     -0.218,
-     0.02
+     -0.219,
+     0.021
     ],
     "r_hist": [
-     1447,
+     1445,
      49,
      131,
      167,
@@ -45,37 +151,37 @@
      314,
      28
     ],
-    "base_R": 0.058,
-    "edge": -0.162,
+    "base_R": 0.053,
+    "edge": -0.157,
     "edge_ci": [
      -0.263,
-     -0.066
+     -0.062
     ],
     "avg_win_pct": 12.6,
     "avg_loss_pct": -7.7
    },
    "val": {
-    "n": 2076,
-    "n_eff": 1674,
+    "n": 2073,
+    "n_eff": 1671,
     "win": 34.6,
     "target": 11.1,
     "stop": 58.5,
     "ambiguous": 0.0,
-    "expectancy": -0.114,
+    "expectancy": -0.113,
     "median_R": -1.018,
     "pf": 0.82,
-    "ret_mean": -0.81,
+    "ret_mean": -0.8,
     "ret_median": -8.05,
-    "days": 36.8,
-    "max_dd_R": 354.5,
+    "days": 36.9,
+    "max_dd_R": 350.4,
     "sharpe_m": -0.52,
-    "sortino_m": -0.55,
+    "sortino_m": -0.54,
     "exp_ci": [
      -0.24,
-     0.042
+     0.043
     ],
     "r_hist": [
-     1215,
+     1212,
      38,
      105,
      149,
@@ -84,37 +190,37 @@
      256,
      18
     ],
-    "base_R": 0.027,
-    "edge": -0.142,
+    "base_R": 0.021,
+    "edge": -0.134,
     "edge_ci": [
-     -0.253,
-     -0.022
+     -0.242,
+     -0.015
     ],
     "avg_win_pct": 12.2,
     "avg_loss_pct": -7.7
    },
    "test": {
-    "n": 398,
+    "n": 399,
     "n_eff": 329,
-    "win": 32.4,
+    "win": 32.3,
     "target": 13.3,
-    "stop": 58.0,
+    "stop": 58.1,
     "ambiguous": 0.0,
-    "expectancy": -0.052,
+    "expectancy": -0.054,
     "median_R": -1.018,
     "pf": 0.92,
-    "ret_mean": -0.32,
+    "ret_mean": -0.33,
     "ret_median": -8.05,
     "days": 34.6,
-    "max_dd_R": 50.7,
-    "sharpe_m": -0.34,
-    "sortino_m": -0.37,
+    "max_dd_R": 51.7,
+    "sharpe_m": -0.35,
+    "sortino_m": -0.39,
     "exp_ci": [
-     -0.332,
-     0.19
+     -0.337,
+     0.187
     ],
     "r_hist": [
-     232,
+     233,
      11,
      26,
      18,
@@ -123,11 +229,11 @@
      58,
      10
     ],
-    "base_R": 0.168,
-    "edge": -0.22,
+    "base_R": 0.171,
+    "edge": -0.226,
     "edge_ci": [
-     -0.45,
-     -0.013
+     -0.467,
+     -0.021
     ],
     "avg_win_pct": 14.7,
     "avg_loss_pct": -7.5
@@ -135,102 +241,102 @@
   },
   "ON2 + RS 80 ומעלה": {
    "all": {
-    "n": 1012,
-    "n_eff": 886,
-    "win": 34.8,
-    "target": 15.0,
-    "stop": 59.8,
+    "n": 1013,
+    "n_eff": 888,
+    "win": 34.9,
+    "target": 15.1,
+    "stop": 59.6,
     "ambiguous": 0.0,
-    "expectancy": -0.033,
+    "expectancy": -0.029,
     "median_R": -1.018,
     "pf": 0.95,
-    "ret_mean": -0.16,
+    "ret_mean": -0.13,
     "ret_median": -8.05,
-    "days": 32.8,
-    "max_dd_R": 156.6,
-    "sharpe_m": -0.11,
-    "sortino_m": -0.16,
+    "days": 32.9,
+    "max_dd_R": 155.6,
+    "sharpe_m": -0.1,
+    "sortino_m": -0.14,
     "exp_ci": [
-     -0.231,
-     0.188
+     -0.224,
+     0.192
     ],
     "r_hist": [
-     605,
+     604,
      15,
      40,
-     68,
+     69,
      49,
      55,
-     164,
+     165,
      16
     ],
-    "base_R": 0.058,
-    "edge": -0.091,
+    "base_R": 0.053,
+    "edge": -0.083,
     "edge_ci": [
-     -0.254,
-     0.1
+     -0.249,
+     0.103
     ],
     "avg_win_pct": 14.3,
     "avg_loss_pct": -7.9
    },
    "val": {
     "n": 881,
-    "n_eff": 766,
-    "win": 35.5,
+    "n_eff": 767,
+    "win": 35.6,
     "target": 14.5,
-    "stop": 59.1,
+    "stop": 59.0,
     "ambiguous": 0.0,
-    "expectancy": -0.035,
+    "expectancy": -0.034,
     "median_R": -1.018,
     "pf": 0.95,
-    "ret_mean": -0.18,
+    "ret_mean": -0.17,
     "ret_median": -8.05,
     "days": 33.9,
-    "max_dd_R": 156.6,
+    "max_dd_R": 155.6,
     "sharpe_m": -0.11,
     "sortino_m": -0.17,
     "exp_ci": [
-     -0.248,
-     0.247
+     -0.247,
+     0.248
     ],
     "r_hist": [
-     521,
+     520,
      13,
      34,
-     64,
+     65,
      46,
      52,
      139,
      12
     ],
-    "base_R": 0.027,
-    "edge": -0.063,
+    "base_R": 0.021,
+    "edge": -0.055,
     "edge_ci": [
-     -0.252,
-     0.126
+     -0.242,
+     0.135
     ],
-    "avg_win_pct": 13.8,
+    "avg_win_pct": 13.7,
     "avg_loss_pct": -7.9
    },
    "test": {
-    "n": 131,
-    "n_eff": 121,
-    "win": 29.8,
-    "target": 18.3,
-    "stop": 64.1,
+    "n": 132,
+    "n_eff": 122,
+    "win": 30.3,
+    "target": 18.9,
+    "stop": 63.6,
     "ambiguous": 0.0,
-    "expectancy": -0.016,
+    "expectancy": 0.003,
     "median_R": -1.018,
-    "pf": 0.98,
-    "ret_mean": -0.03,
+    "pf": 1.0,
+    "ret_mean": 0.12,
     "ret_median": -8.05,
     "days": 25.8,
     "max_dd_R": 22.8,
-    "sharpe_m": -0.06,
-    "sortino_m": -0.06,
+    "sharpe_m": 0.01,
+    "sortino_m": 0.01,
     "exp_ci": [
-     -0.312,
-     0.305
+     -0.285,
+     0.311
     ],
     "r_hist": [
      84,
@@ -239,14 +345,14 @@
      4,
      3,
      3,
-     25,
+     26,
      4
     ],
-    "base_R": 0.168,
-    "edge": -0.184,
+    "base_R": 0.171,
+    "edge": -0.168,
     "edge_ci": [
      -0.472,
-     0.126
+     0.148
     ],
     "avg_win_pct": 18.4,
     "avg_loss_pct": -7.8
@@ -254,40 +360,40 @@
   },
   "ON3 + שוק במגמה עולה (M)": {
    "all": {
-    "n": 428,
-    "n_eff": 388,
-    "win": 32.5,
-    "target": 12.9,
-    "stop": 61.4,
+    "n": 429,
+    "n_eff": 389,
+    "win": 32.9,
+    "target": 13.1,
+    "stop": 61.1,
     "ambiguous": 0.0,
-    "expectancy": -0.131,
+    "expectancy": -0.122,
     "median_R": -1.018,
-    "pf": 0.8,
-    "ret_mean": -0.94,
+    "pf": 0.82,
+    "ret_mean": -0.88,
     "ret_median": -8.05,
     "days": 34.1,
-    "max_dd_R": 91.9,
-    "sharpe_m": -0.41,
-    "sortino_m": -0.5,
+    "max_dd_R": 90.9,
+    "sharpe_m": -0.38,
+    "sortino_m": -0.46,
     "exp_ci": [
-     -0.38,
-     0.163
+     -0.37,
+     0.167
     ],
     "r_hist": [
-     263,
+     262,
      6,
      20,
-     34,
+     35,
      19,
      22,
-     58,
+     59,
      6
     ],
-    "base_R": 0.058,
-    "edge": -0.188,
+    "base_R": 0.053,
+    "edge": -0.175,
     "edge_ci": [
-     -0.431,
-     0.08
+     -0.422,
+     0.088
     ],
     "avg_win_pct": 13.3,
     "avg_loss_pct": -7.8
@@ -295,61 +401,61 @@
    "val": {
     "n": 391,
     "n_eff": 354,
-    "win": 32.7,
+    "win": 33.0,
     "target": 12.5,
-    "stop": 61.6,
+    "stop": 61.4,
     "ambiguous": 0.0,
-    "expectancy": -0.157,
+    "expectancy": -0.154,
     "median_R": -1.018,
     "pf": 0.77,
-    "ret_mean": -1.15,
+    "ret_mean": -1.13,
     "ret_median": -8.05,
-    "days": 34.6,
-    "max_dd_R": 91.9,
-    "sharpe_m": -0.51,
-    "sortino_m": -0.61,
+    "days": 34.7,
+    "max_dd_R": 90.9,
+    "sharpe_m": -0.5,
+    "sortino_m": -0.6,
     "exp_ci": [
-     -0.418,
-     0.203
+     -0.416,
+     0.204
     ],
     "r_hist": [
-     241,
+     240,
      5,
      17,
-     32,
+     33,
      18,
      22,
      52,
      4
     ],
-    "base_R": 0.027,
-    "edge": -0.184,
+    "base_R": 0.021,
+    "edge": -0.175,
     "edge_ci": [
-     -0.457,
-     0.085
+     -0.444,
+     0.102
     ],
-    "avg_win_pct": 12.6,
+    "avg_win_pct": 12.5,
     "avg_loss_pct": -7.8
    },
    "test": {
-    "n": 37,
-    "n_eff": 34,
-    "win": 29.7,
-    "target": 16.2,
-    "stop": 59.5,
+    "n": 38,
+    "n_eff": 35,
+    "win": 31.6,
+    "target": 18.4,
+    "stop": 57.9,
     "ambiguous": 0.0,
-    "expectancy": 0.145,
+    "expectancy": 0.206,
     "median_R": -1.018,
-    "pf": 1.22,
-    "ret_mean": 1.26,
+    "pf": 1.32,
+    "ret_mean": 1.75,
     "ret_median": -8.05,
-    "days": 28.9,
+    "days": 28.8,
     "max_dd_R": 8.3,
-    "sharpe_m": 0.33,
-    "sortino_m": 0.44,
+    "sharpe_m": 0.46,
+    "sortino_m": 0.6,
     "exp_ci": [
-     -0.396,
-     0.979
+     -0.334,
+     1.035
     ],
     "r_hist": [
      22,
@@ -358,16 +464,16 @@
      2,
      1,
      0,
-     6,
+     7,
      2
     ],
-    "base_R": 0.168,
-    "edge": -0.024,
+    "base_R": 0.171,
+    "edge": 0.035,
     "edge_ci": [
-     -0.558,
-     0.693
+     -0.447,
+     0.785
     ],
-    "avg_win_pct": 21.8,
+    "avg_win_pct": 21.7,
     "avg_loss_pct": -7.5
    }
   },
@@ -402,11 +508,11 @@
      4,
      1
     ],
-    "base_R": 0.058,
-    "edge": -0.157,
+    "base_R": 0.053,
+    "edge": -0.153,
     "edge_ci": [
-     -0.892,
-     1.082
+     -0.889,
+     1.088
     ],
     "avg_win_pct": 27.9,
     "avg_loss_pct": -8.1
@@ -441,11 +547,11 @@
      4,
      0
     ],
-    "base_R": 0.027,
-    "edge": -0.475,
+    "base_R": 0.021,
+    "edge": -0.469,
     "edge_ci": [
-     -0.954,
-     0.209
+     -0.938,
+     0.208
     ],
     "avg_win_pct": 17.0,
     "avg_loss_pct": -8.1
@@ -480,11 +586,11 @@
      0,
      1
     ],
-    "base_R": 0.168,
-    "edge": 4.439,
+    "base_R": 0.171,
+    "edge": 4.436,
     "edge_ci": [
-     -1.253,
-     10.108
+     -1.265,
+     10.11
     ],
     "avg_win_pct": 82.0,
     "avg_loss_pct": -8.0
@@ -492,27 +598,27 @@
   },
   "בדיקה: ON1 + M בלבד": {
    "all": {
-    "n": 962,
-    "n_eff": 842,
-    "win": 31.2,
+    "n": 959,
+    "n_eff": 839,
+    "win": 31.3,
     "target": 9.6,
-    "stop": 61.0,
+    "stop": 60.9,
     "ambiguous": 0.0,
-    "expectancy": -0.202,
+    "expectancy": -0.199,
     "median_R": -1.018,
     "pf": 0.7,
-    "ret_mean": -1.51,
+    "ret_mean": -1.49,
     "ret_median": -8.05,
-    "days": 37.2,
-    "max_dd_R": 230.0,
-    "sharpe_m": -0.82,
+    "days": 37.3,
+    "max_dd_R": 226.9,
+    "sharpe_m": -0.81,
     "sortino_m": -0.77,
     "exp_ci": [
-     -0.38,
-     -0.028
+     -0.379,
+     -0.024
     ],
     "r_hist": [
-     587,
+     584,
      15,
      60,
      70,
@@ -521,37 +627,37 @@
      102,
      8
     ],
-    "base_R": 0.058,
-    "edge": -0.26,
+    "base_R": 0.053,
+    "edge": -0.253,
     "edge_ci": [
-     -0.426,
-     -0.095
+     -0.425,
+     -0.089
     ],
     "avg_win_pct": 12.0,
     "avg_loss_pct": -7.6
    },
    "val": {
-    "n": 856,
-    "n_eff": 749,
-    "win": 30.8,
-    "target": 9.2,
-    "stop": 61.7,
+    "n": 853,
+    "n_eff": 746,
+    "win": 30.9,
+    "target": 9.3,
+    "stop": 61.5,
     "ambiguous": 0.0,
-    "expectancy": -0.238,
+    "expectancy": -0.235,
     "median_R": -1.018,
     "pf": 0.65,
-    "ret_mean": -1.8,
+    "ret_mean": -1.78,
     "ret_median": -8.05,
-    "days": 37.3,
-    "max_dd_R": 230.0,
-    "sharpe_m": -0.97,
-    "sortino_m": -0.92,
+    "days": 37.4,
+    "max_dd_R": 226.9,
+    "sharpe_m": -0.96,
+    "sortino_m": -0.91,
     "exp_ci": [
-     -0.426,
-     -0.025
+     -0.422,
+     -0.024
     ],
     "r_hist": [
-     528,
+     525,
      14,
      50,
      66,
@@ -560,11 +666,11 @@
      87,
      4
     ],
-    "base_R": 0.027,
-    "edge": -0.265,
+    "base_R": 0.021,
+    "edge": -0.256,
     "edge_ci": [
-     -0.439,
-     -0.063
+     -0.428,
+     -0.049
     ],
     "avg_win_pct": 11.4,
     "avg_loss_pct": -7.7
@@ -599,11 +705,11 @@
      15,
      4
     ],
-    "base_R": 0.168,
-    "edge": -0.082,
+    "base_R": 0.171,
+    "edge": -0.085,
     "edge_ci": [
-     -0.493,
-     0.315
+     -0.495,
+     0.324
     ],
     "avg_win_pct": 16.4,
     "avg_loss_pct": -7.3
@@ -640,11 +746,11 @@
      7,
      3
     ],
-    "base_R": 0.058,
-    "edge": -0.103,
+    "base_R": 0.053,
+    "edge": -0.098,
     "edge_ci": [
-     -0.594,
-     0.65
+     -0.592,
+     0.652
     ],
     "avg_win_pct": 20.6,
     "avg_loss_pct": -8.0
@@ -679,11 +785,11 @@
      7,
      2
     ],
-    "base_R": 0.027,
-    "edge": -0.211,
+    "base_R": 0.021,
+    "edge": -0.205,
     "edge_ci": [
-     -0.606,
-     0.406
+     -0.607,
+     0.43
     ],
     "avg_win_pct": 16.8,
     "avg_loss_pct": -8.0
@@ -718,11 +824,11 @@
      0,
      1
     ],
-    "base_R": 0.168,
-    "edge": 2.564,
+    "base_R": 0.171,
+    "edge": 2.561,
     "edge_ci": [
-     -1.278,
-     10.028
+     -1.285,
+     10.016
     ],
     "avg_win_pct": 82.0,
     "avg_loss_pct": -8.0
@@ -743,8 +849,8 @@
    "exp": -0.115
   },
   "בסיס שטוח": {
-   "n": 862,
-   "exp": -0.127
+   "n": 860,
+   "exp": -0.125
   },
   "דגל גבוה וצר (High Tight Flag)": {
    "n": 27,
@@ -753,68 +859,68 @@
  },
  "by_stage": {
   "1": {
-   "n": 1638,
-   "exp": -0.091
+   "n": 1640,
+   "exp": -0.087
   },
   "2": {
-   "n": 500,
-   "exp": -0.114
+   "n": 495,
+   "exp": -0.121
   },
   "3": {
    "n": 186,
    "exp": -0.152
   },
   "4+": {
-   "n": 150,
-   "exp": -0.157
+   "n": 151,
+   "exp": -0.163
   }
  },
  "by_year_on2": {
   "2018": {
    "n": 116,
    "exp": -0.346,
-   "edge": -0.23
+   "edge": -0.185
   },
   "2019": {
    "n": 114,
    "exp": 0.066,
-   "edge": -0.133
+   "edge": -0.138
   },
   "2020": {
    "n": 52,
    "exp": -0.016,
-   "edge": -0.453
+   "edge": -0.4
   },
   "2021": {
    "n": 84,
    "exp": -0.272,
-   "edge": -0.243
+   "edge": -0.264
   },
   "2022": {
-   "n": 144,
-   "exp": -0.509,
-   "edge": -0.241
+   "n": 143,
+   "exp": -0.506,
+   "edge": -0.24
   },
   "2023": {
-   "n": 180,
-   "exp": 0.564,
-   "edge": 0.457
+   "n": 181,
+   "exp": 0.561,
+   "edge": 0.46
   },
   "2024": {
    "n": 133,
    "exp": 0.372,
-   "edge": 0.258
+   "edge": 0.24
   },
   "2025": {
    "n": 126,
    "exp": -0.323,
-   "edge": -0.445
+   "edge": -0.455
   },
   "2026": {
-   "n": 63,
-   "exp": -0.222,
-   "edge": -0.201
+   "n": 64,
+   "exp": -0.18,
+   "edge": -0.149
   }
  },
- "runtime_s": 668
+ "runtime_s": 692
 }
