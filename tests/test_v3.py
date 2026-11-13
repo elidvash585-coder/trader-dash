@@ -231,3 +231,12 @@ class Decision(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RsScope(unittest.TestCase):
+    def test_threshold_only_against_the_whole_market(self):
+        import oneil as ON
+        L = lambda meta: next(i for i in ON.canslim(rs_pct=94, rs_meta=meta) if i["letter"] == "L")
+        self.assertTrue(L({"scope": "universe", "n": 5000, "date": "2026-11-12"})["ok"])
+        self.assertIsNone(L({"scope": "narrow", "label": "87 מניות גדולות בלבד"})["ok"])  # not comparable to IBD's 80
+        self.assertIn("לא דירוג IBD", L({"scope": "universe", "n": 5000})["detail"])

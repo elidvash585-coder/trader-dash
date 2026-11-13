@@ -258,7 +258,7 @@ M_HE = {"uptrend": "מגמה עולה מאושרת", "pressure": "מגמה עו�
 
 # ---------------------------------------------------------------- CAN SLIM
 
-def canslim(ev=None, fund=None, rs_pct=None, rsl=None, near_high=None, acc=None, mstate=None, breakout=None):
+def canslim(ev=None, fund=None, rs_pct=None, rsl=None, near_high=None, acc=None, mstate=None, breakout=None, rs_meta=None):
     """Seven letters, each True / False / None (None = cannot be measured from the data we have)."""
     f = fund or {}
     items = []
@@ -295,10 +295,17 @@ def canslim(ev=None, fund=None, rs_pct=None, rsl=None, near_high=None, acc=None,
             acc["grade"], acc["ratio"], ", נפח פריצה x%.1f" % breakout["vol_ratio"] if breakout and breakout.get("vol_ratio") else ""))
     else:
         add("S", "ביקוש: נפח ואיסוף", None, "אין נתוני נפח")
-    if rs_pct is not None:
-        add("L", "מניה מובילה, RS 80+", rs_pct >= 80, "RS %d%s" % (rs_pct, ", קו RS בשיא" if rsl and rsl["at_high"] else ""))
+    rm = rs_meta or {}
+    line = ", קו RS בשיא" if rsl and rsl["at_high"] else ""
+    if rs_pct is not None and rm.get("scope") == "universe":
+        # our own ranking, IBD-style formula, against the whole liquid US list: a proxy, not IBD's RS Rating
+        add("L", "מניה מובילה, RS פנימי 80+", rs_pct >= 80,
+            "RS פנימי %d, מול %s מניות בארה\"ב (%s). קירוב בנוסחת IBD, לא דירוג IBD%s" % (rs_pct, format(rm.get("n", 0), ","), rm.get("date", ""), line))
+    elif rs_pct is not None:
+        add("L", "מניה מובילה, RS פנימי 80+", None,
+            "RS פנימי %d מול %s בלבד: לא שקול לדירוג על כל השוק, ולכן הסף 80 לא מיושם%s" % (rs_pct, rm.get("label", "קבוצה מצומצמת"), line))
     else:
-        add("L", "מניה מובילה, RS 80+", None, "אין מספיק היסטוריה או מניות להשוואה")
+        add("L", "מניה מובילה, RS פנימי 80+", None, "אין מספיק היסטוריה או מניות להשוואה")
     inst = f.get("inst_pct")
     if inst is not None:
         add("I", "בעלות מוסדית", 0.20 <= inst <= 0.95, "מוסדיים מחזיקים %.0f%%. מגמת מספר הקרנות: לא זמינה" % (inst * 100))
@@ -307,7 +314,8 @@ def canslim(ev=None, fund=None, rs_pct=None, rsl=None, near_high=None, acc=None,
     if mstate:
         add("M", "כיוון השוק", mstate["state"] == "uptrend", M_HE[mstate["state"]] + (
             ", %d ימי פיזור" % mstate["dist"] if mstate.get("dist") else "") + (
-            ", יום %d לניסיון" % mstate["rally_day"] if mstate.get("rally_day") else ""))
+            ", יום %d לניסיון" % mstate["rally_day"] if mstate.get("rally_day") else "") +
+            ". חישוב עצמאי לפי כללי הספר על SPY ו-QQQ, לא הקביעה הרשמית של IBD")
     else:
         add("M", "כיוון השוק", None, "אין נתוני מדד")
     return items
@@ -315,7 +323,7 @@ def canslim(ev=None, fund=None, rs_pct=None, rsl=None, near_high=None, acc=None,
 
 # ---------------------------------------------------------------- the live view
 
-def analyze(t, o, h, l, c, v, spy=None, ev=None, fund=None, rs_pct=None, mstate=None, closed=True):
+def analyze(t, o, h, l, c, v, spy=None, ev=None, fund=None, rs_pct=None, mstate=None, closed=True, rs_meta=None):
     """Everything the site shows for one stock, from bars 0..len-1 (pass closed bars only)."""
     e = len(c) - 1
     if e < 260:
@@ -389,7 +397,13 @@ def analyze(t, o, h, l, c, v, spy=None, ev=None, fund=None, rs_pct=None, mstate=
         if ups and ups[-1] == max(ups) and ups[-1] > 0.05 and o[e] > h[e - 1] and near < 1:
             sells.append("ייתכן ריצת שיא (Climax): העלייה היומית הגדולה במהלך, עם פער פתיחה")
     out["sell"] = sells
-    out["canslim"] = canslim(ev, fund, rs_pct, rsl, near, acc, mstate, brk)
+    out["canslim"] = canslim(ev, fund, rs_pct, rsl, near, acc, mstate, brk, rs_meta)
+    # excess return vs SPY (S&P 500) over 3, 6 and 12 months, in percentage points: plain, verifiable numbers
+    exc = {}
+    for lab, n in (("3m", 63), ("6m", 126), ("12m", 252)):
+        if spy and e >= n and c[e - n] and spy[e] and spy[e - n]:
+            exc[lab] = round((c[e] / c[e - n] - spy[e] / spy[e - n]) * 100, 1)
+    out["excess"] = exc
     out["closed"] = closed
     return out
 

@@ -153,6 +153,12 @@ def main():
         z = np.load(p)
         cols[s] = pd.Series(rs_raw_np(z["c"]), index=(z["t"] // 86400))
     rs = pd.DataFrame(cols)
+    # the site ranks a stock's RS against this cross-section (latest value of every stock with 10y bars)
+    last = rs.iloc[-5:].ffill().iloc[-1].dropna()
+    with open(os.path.join(OUT, "rs_reference_universe.json"), "w", encoding="utf-8") as fh:
+        json.dump({"date": str(datetime.date.fromordinal(datetime.date(1970, 1, 1).toordinal() + int(rs.index[-1]))),
+                   "n": int(len(last)), "raw": [round(float(x), 4) for x in last.tolist()], "scope": "universe",
+                   "formula": "0.4*r63 + 0.2*r126 + 0.2*r189 + 0.2*r252 (IBD-style; NOT IBD's RS Rating)"}, fh)
     rs_pct = rs.rank(axis=1, pct=True) * 100
     del rs, cols
     print("RS ranks: %d days x %d stocks (%.0fs)" % (rs_pct.shape[0], rs_pct.shape[1], time.time() - t0), flush=True)
@@ -240,7 +246,7 @@ def main():
         sig["ca"] = sig.apply(ca_of, axis=1)
         sig["month"] = sig.date.dt.to_period("M")
         sig["exit_date"] = sig.date + pd.to_timedelta(sig.days * 1.45, unit="D")
-    res = {"generated": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC"), "demo": D.DEMO,
+    res = {"by_market": {}, "per_stock": {}, "generated": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC"), "demo": D.DEMO,
            "universe": len(syms), "stocks_with_bars": len(paths), "stocks_with_breakouts": int(sig.sym.nunique()) if len(sig) else 0,
            "sec_stocks": len(pit), "from": str(base.date.min().date()), "to": str(base.date.max().date()), "test_from": TEST_FROM,
            "filters": {"min_price": MIN_PRICE, "min_dollar_volume_50d": MIN_DOLLAR_VOL}, "base_all": round(float(base.R.mean()), 3),
@@ -270,6 +276,16 @@ def main():
         for k_, g in sig.groupby(sig.stage.clip(upper=4)):
             res["by_stage"]["%d%s" % (k_, "+" if k_ == 4 else "")] = {"n": int(len(g)), "exp": round(float(g.R.mean()), 3)}
         on2 = sig[sig.rs >= 80]
+        res["by_market"], res["per_stock"] = {}, {}
+        for vname, d in (("ON1", sig), ("ON2", on2)):
+            for st in ("uptrend", "pressure", "rally", "correction"):
+                x, b_ = d[d.m == st], base[base.m == st]
+                m_ = B4.metrics(x, b_, 40) if len(x) >= 20 and len(b_) else {"n": int(len(x))}
+                res["by_market"]["%s|%s" % (vname, st)] = {k: m_.get(k) for k in ("n", "n_eff", "win", "expectancy", "edge", "edge_ci")}
+            ps = d.groupby("sym").R.mean()
+            res["per_stock"][vname] = {"stocks": int(len(ps)), "mean_of_stock_means": round(float(ps.mean()), 3),
+                                       "median_stock": round(float(ps.median()), 3), "share_stocks_positive": round(float((ps > 0).mean() * 100), 1),
+                                       "trades_per_stock_median": float(d.groupby("sym").size().median())}
         for y, g in on2.groupby(on2.date.dt.year):
             b_ = base[base.date.dt.year == y]
             res["by_year_on2"][str(y)] = {"n": int(len(g)), "exp": round(float(g.R.mean()), 3),
@@ -306,6 +322,10 @@ def report(res):
                 f(m["exp_ci"]), m.get("edge", 0), f(m.get("edge_ci")), m["pf"], m["max_dd_R"], m["days"]))
     L += ["", "By base type (ON1): " + ", ".join("%s n %d exp %+.3f" % (k, v["n"], v["exp"]) for k, v in res["by_type"].items()),
           "By base stage (ON1): " + ", ".join("%s n %d exp %+.3f" % (k, v["n"], v["exp"]) for k, v in res["by_stage"].items()),
+          "By market state at the signal (O'Neil M, computed by us on SPY/QQQ): " + "; ".join(
+              "%s n %s win %s exp %s edge %s %s" % (k, v.get("n"), v.get("win"), v.get("expectancy"), v.get("edge"), f(v.get("edge_ci")) if v.get("edge_ci") else "")
+              for k, v in res.get("by_market", {}).items()),
+          "Per stock (mean of each stock's mean R): " + "; ".join("%s %s" % (k, v) for k, v in res.get("per_stock", {}).items()),
           "ON2 by year: " + ", ".join("%s n %d exp %+.2f edge %s" % (k, v["n"], v["exp"], v["edge"]) for k, v in res["by_year_on2"].items())]
     return "\n".join(L) + "\n"
 

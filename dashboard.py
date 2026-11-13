@@ -696,11 +696,14 @@ def oneil_market(ctx):
 
 
 RS_REF = None
-try:
-    with open(os.path.join(HERE, "research", "rs_reference.json"), encoding="utf-8") as _fh:
-        RS_REF = json.load(_fh)
-except Exception:
-    RS_REF = None
+for _name, _scope in (("rs_reference_universe.json", "universe"), ("rs_reference.json", "narrow")):
+    try:  # the whole liquid US list (backtest6_universe.py) when it exists, else the older 87-stock list
+        with open(os.path.join(HERE, "research", _name), encoding="utf-8") as _fh:
+            RS_REF = json.load(_fh)
+        RS_REF["scope"] = _scope
+        break
+    except Exception:
+        RS_REF = None
 
 
 ON_RES = None
@@ -728,8 +731,15 @@ def oneil_block(sym, candles, fund=None, sec=None):
     if not ref:  # no research reference yet: rank among the watchlist bars already loaded
         ref = [ON.rs_raw([float(x[4]) for x in v_[1]["candles"]], len(v_[1]["candles"]) - 1) for v_ in list(_cache.values())]
     rs_pct = ON.rs_percentile(raw_, ref)
-    out = ON.analyze(t, o, h, l, c, v, spy, (sec or {}).get("growth"), fund, rs_pct, m.get("oneil_m"))
-    out["rs_ref"] = "%d מניות גדולות (מחקר %s)" % (len(RS_REF["raw"]), RS_REF.get("date", "")) if RS_REF else "רשימת המעקב בלבד"
+    if RS_REF and RS_REF.get("scope") == "universe":
+        meta = {"scope": "universe", "n": len(RS_REF["raw"]), "date": RS_REF.get("date", "")}
+        label = "%s מניות בארה\"ב (%s)" % (format(len(RS_REF["raw"]), ","), RS_REF.get("date", ""))
+    else:
+        label = "%d מניות גדולות בלבד" % len(RS_REF["raw"]) if RS_REF else "רשימת המעקב בלבד"
+        meta = {"scope": "narrow", "label": label}
+    out = ON.analyze(t, o, h, l, c, v, spy, (sec or {}).get("growth"), fund, rs_pct, m.get("oneil_m"), rs_meta=meta)
+    out["rs_ref"] = label
+    out["rs_scope"] = meta["scope"]
     out["research"] = ON_RES
     return out
 
