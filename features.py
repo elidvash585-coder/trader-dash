@@ -17,12 +17,20 @@ ROLL_PCT = 252     # bars for the ATR% percentile
 # ---------------------------------------------------------------- basic series
 
 def _rma(x, n):
-    """Wilder smoothing (= pandas ewm(alpha=1/n, adjust=False)), skipping leading None."""
-    out, a = [None] * len(x), None
+    """Wilder smoothing, seeded the way Wilder defined it: the first value is the simple average of the
+    first n values (None before that), then a += (v - a) / n. Seeding with the first single value instead
+    (as before v3) made RSI up to 14 points and ATR up to 16 % wrong in a stock's first ~60 sessions."""
+    out, a, seed = [None] * len(x), None, []
     for i, v in enumerate(x):
         if v is None:
             continue
-        a = v if a is None else a + (v - a) / n
+        if a is None:
+            seed.append(v)
+            if len(seed) < n:
+                continue
+            a = sum(seed) / n
+        else:
+            a = a + (v - a) / n
         out[i] = a
     return out
 
@@ -172,6 +180,59 @@ def structure(h, l, c, a, k=K_PIVOT):
         if t >= 20 and a[t]:
             out["consol"][t] = (max(h[t - 19:t + 1]) - min(l[t - 19:t + 1])) / a[t] < 4.0
     return out
+
+
+def levels(h, l, c, a, look=250, k=K_PIVOT, max_n=3, end=None):
+    """Main support / resistance levels known at the close of bar `end` (default: the last bar).
+    Built from CONFIRMED swing points only (pivot j counts from bar j + k), clustered within 0.5 ATR.
+    Each level: price (median of its swing points), touches, last (bar index), flip (it was a swing high
+    AND a swing low, i.e. support that became resistance or the reverse).
+    Up to max_n each side, nearest first, levels touched twice or more preferred; none are invented
+    (a stock at a new high has no resistance). Also the most recent unfilled price gap on each side."""
+    N = len(c) if end is None else end + 1
+    if N < 2 * k + 5 or not a or a[N - 1] is None:
+        return {"support": [], "resistance": [], "gap_up": None, "gap_down": None}
+    atr_ = a[N - 1]
+    tol = 0.5 * atr_
+    lo = max(k, N - look)
+    pts = []
+    for j in range(lo, N - k):
+        wh, wl = h[j - k:j + k + 1], l[j - k:j + k + 1]
+        if h[j] == max(wh) and h[j] > h[j - 1]:
+            pts.append((h[j], j, "h"))
+        if l[j] == min(wl) and l[j] < l[j - 1]:
+            pts.append((l[j], j, "l"))
+    pts.sort()
+    cl_ = []
+    for p in pts:
+        if cl_ and p[0] - cl_[-1][-1][0] <= tol and p[0] - cl_[-1][0][0] <= 2 * tol:
+            cl_[-1].append(p)
+        else:
+            cl_.append([p])
+    price = c[N - 1]
+    lv = []
+    for g in cl_:
+        ps = sorted(x[0] for x in g)
+        m = ps[len(ps) // 2] if len(ps) % 2 else (ps[len(ps) // 2 - 1] + ps[len(ps) // 2]) / 2
+        kinds = {x[2] for x in g}
+        lv.append({"price": round(m, 2), "touches": len(g), "last": max(x[1] for x in g), "flip": len(kinds) == 2,
+                   "dist_atr": round((m - price) / atr_, 2)})
+
+    def pick(side):
+        s = [x for x in lv if (x["price"] < price if side == "s" else x["price"] > price)]
+        s.sort(key=lambda x: abs(x["price"] - price))
+        strong = [x for x in s if x["touches"] >= 2]
+        out = strong[:max_n]
+        if len(out) < max_n:  # fill with single swing points, nearest first, marked by touches = 1
+            out += [x for x in s if x["touches"] < 2][:max_n - len(out)]
+        return sorted(out, key=lambda x: abs(x["price"] - price))[:max_n]
+    gap_up = gap_down = None
+    for i in range(max(1, N - look), N):
+        if l[i] > h[i - 1] and l[i] - h[i - 1] >= 0.2 * atr_ and min(l[i + 1:N] or [l[i]]) > h[i - 1]:
+            gap_up = {"low": round(h[i - 1], 2), "high": round(l[i], 2), "bar": i}
+        if h[i] < l[i - 1] and l[i - 1] - h[i] >= 0.2 * atr_ and max(h[i + 1:N] or [h[i]]) < l[i - 1]:
+            gap_down = {"low": round(h[i], 2), "high": round(l[i - 1], 2), "bar": i}
+    return {"support": pick("s"), "resistance": pick("r"), "gap_up": gap_up, "gap_down": gap_down}
 
 
 # ---------------------------------------------------------------- volume

@@ -104,11 +104,11 @@ class Override(unittest.TestCase):
             a = D.analyze("NVDA")
             h, p, d = D.engine_block(a["tech"], a["fund"], None, None, {"value": 5.0}, {"level": "critical", "verify": "מאומת"})
             self.assertLessEqual(h["value"], 5.0)
-            self.assertIn(d["code"], ("wait", "exposure"))
-            if d["code"] == "wait":
-                self.assertEqual(d["verdict"], "המתנה: אירוע מהותי")
+            self.assertIn(d["code"], ("no", "reduce"))  # v3: a material event inside the window -> do not enter
+            self.assertTrue(any("אירוע מהותי" in x for x in d["hard"]))
             h2, _, d2 = D.engine_block(a["tech"], a["fund"], None, None, {"value": 5.0}, None)
-            self.assertGreater(h2["value"], 5.0)
+            self.assertFalse(any("אירוע מהותי" in x for x in d2["hard"]))
+            self.assertFalse(any("אירוע מהותי" in x for x in h2["caps"]))
         finally:
             EN.TABLE = old
             D.DEMO = False

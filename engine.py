@@ -241,11 +241,15 @@ NOT_COVERED = {"crypto": "קריפטו", "leveraged_etf": "תעודת סל ממ�
 
 
 def load_table():
-    try:
-        with open(os.path.join(HERE, "research", "score_table_v2.json"), encoding="utf-8") as fh:
-            return json.load(fh)
-    except Exception:
-        return None
+    """research/score_table_v3.json (whole US market, the v3 trade with a structural stop) when it exists,
+    else the older 87-stock table."""
+    for name in ("score_table_v3.json", "score_table_v2.json"):
+        try:
+            with open(os.path.join(HERE, "research", name), encoding="utf-8") as fh:
+                return json.load(fh)
+        except Exception:
+            continue
+    return None
 
 
 TABLE = load_table()
@@ -324,9 +328,11 @@ def hist_score(rsi, asset=None, blockers=None, tab=None, cfg=None):
     return {"value": val, "label": label, "code": "go" if val >= 7 else "wait" if val >= 5.6 else "no", "version": "v2",
             "bucket": r.get("label", lab), "p_profit": r["profit"], "p_target": r["target"], "exp_R": r["exp_R"],
             "edge": r["edge"], "edge_ci": [lo, hi], "significant": sig, "stable": stable, "n": r["n"], "n_eff": r["n_eff"],
+            "val_edge": ve, "test_edge": te, "stats": {k: r.get(k) for k in ("win", "avg_win_R", "avg_loss_R", "pf", "max_dd_R", "worst_R", "stop")},
             "gap_loss": r.get("gap_loss"), "reasons": reasons, "capped": bool(caps or bl),
             "meta": {"stocks": tab["stocks"], "from": tab["from"], "to": tab["to"], "test_from": tab["test_from"],
-                     "cost": "0.10% + החלקה 0.05% לכל צד"}}
+                     "cost": "0.10% + החלקה 0.05% לכל צד", "universe": tab.get("universe", "87 מניות גדולות שנבחרו ידנית"),
+                     "trade": tab.get("trade_he"), "pooled": True}}
 
 
 # ================================================================ trade plan and decision

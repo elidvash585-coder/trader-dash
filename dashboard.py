@@ -35,6 +35,8 @@ import engine as EN  # noqa: E402
 import risk as RK  # noqa: E402
 import events as EV  # noqa: E402
 import oneil as ON  # noqa: E402
+import engine3 as EN3  # noqa: E402  (v3: technical score, entry score, plan, decision)
+import dataqa as DQ  # noqa: E402  (market-data checks)
 try:
     import extras  # time machine, SEC, Congress (day-trader-skill)
 except Exception:
@@ -762,6 +764,7 @@ def fx_block(t, o, h, l, c, v, partial):
     x = {k: FX.last(f, k) for k in keys}
     x["price"] = c[-1]
     x["chg1"] = (c[-1] / c[-2] - 1) * 100 if len(c) > 1 else None
+    x["move_atr"] = (c[-1] - c[-2]) / x["atr"] if len(c) > 1 and x.get("atr") else None
     x["regime"] = ((m or {}).get("regime") or {}).get("code")
     x["bar_partial_excluded"] = bool(partial)
     # chart overlays (off by default in the UI): anchored VWAPs and an approximate volume profile
@@ -775,6 +778,12 @@ def fx_block(t, o, h, l, c, v, partial):
             s_ = FX.avwap(h, l, c, v, a)
             ov[name] = {"anchor": t[a], "series": [[t[i], round(s_[i], 2)] for i in range(a, len(c))]}
     ov["vprofile"] = FX.volume_profile(h, l, v)
+    lv = FX.levels(h, l, c, f["atr"])
+    poc = (ov["vprofile"] or {}).get("poc") if isinstance(ov["vprofile"], dict) else None
+    for side in ("support", "resistance"):
+        for z in lv[side]:
+            z["volume_node"] = bool(poc and x.get("atr") and abs(z["price"] - poc) <= 0.5 * x["atr"])
+    ov["levels"] = lv
     return x, ov
 
 
@@ -786,7 +795,7 @@ def ind_score(tech, plan=None, fund=None, tm=None, congress=None, sector=None):
         return ind_score_v1(tech, plan, fund, tm, congress)
     if sector:
         x.update(sector)
-    return EN.indicator_score(x, fund, tm)
+    return EN3.technical_score(x)
 
 
 def sector_part(fund, t_last_bars):
@@ -859,34 +868,57 @@ def events_for(fund, sec, ext, plan2):
         if rec:
             ev["sec_material"] = "דיווח %s (%s)" % (rec[0]["date"], ", ".join(rec[0]["items_he"]))
             blockers.append("דיווח מהותי טרי ל-SEC")
-    if ext and ext.get("active") and plan2 and ext.get("price") is not None:
+    if ext and ext.get("active") and plan2 and plan2.get("stop") and ext.get("price") is not None:
         ev["premarket_below_stop"] = ext["price"] <= plan2["stop"]
         if ev["premarket_below_stop"]:
             blockers.append("המחיר מחוץ לשעות המסחר כבר מתחת לסטופ")
     return ev, blockers
 
 
-def engine_block(tech, fund, sec, ext, ind, event=None):
-    """Historical score v2, the tested plan and the decision, all from closed bars.
-    A critical event (events.py) in the last 3 sessions caps the score and suspends entry."""
+def held_symbols():
+    """Symbols in the local holdings file (never on the public site)."""
+    if STATIC_BUILD:
+        return set()
+    try:
+        return {p["symbol"] for p in (RK.read_holdings() or [])}
+    except Exception:
+        return set()
+
+
+STATIC_BUILD = False
+
+
+def engine_block(tech, fund, sec, ext, ind, event=None, sym=None):
+    """v3: entry score, the plan and the decision, all from closed bars (the live price only says whether the
+    entry is still in its zone). Returns (entry score with the history and reliability inside, plan, decision)."""
     x = dict(tech.get("fx") or {})
     if not x:
         return None, None, None
-    x.setdefault("rsi", tech.get("rsi"))
-    plan2 = EN.plan_v2(x)
-    ev, blockers = events_for(fund, sec, ext, plan2)
-    crit = bool(event and event.get("level") == "critical")
-    if crit:
+    lv = tech.get("levels")
+    plan = EN3.plan_v3(x, lv, tech.get("live"))
+    ev, blockers = events_for(fund, sec, ext, plan)
+    if event and event.get("level") == "critical":
         blockers.append("אירוע מהותי ב-3 ימי המסחר האחרונים (%s)" % event.get("verify"))
     hist = EN.hist_score(x.get("rsi"), tech.get("asset"), blockers)
-    dec = EN.decide(x, hist, ind, plan2, ev, tech.get("asset"), fund)
-    if crit and dec["code"] != "exposure":
-        dec.update(verdict="המתנה: אירוע מהותי", code="wait",
-                   missing="אירוע מהותי ב-3 ימי המסחר האחרונים: המחקר לא מתאר מצבים כאלה",
-                   change="הכניסה תיבחן מחדש אחרי 3 ימי מסחר בלי אירוע חדש")
-    elif crit:
-        dec["missing"] = "אירוע מהותי ב-3 ימי המסחר האחרונים"
-    return hist, plan2, dec
+    ent = EN3.entry_score(x, plan, hist, ev, lv)
+    if event and event.get("level") == "critical" and ent.get("value") is not None and ent["value"] > 5.0:
+        ent["value"], ent["caps"] = 5.0, ent["caps"] + ["אירוע מהותי ב-3 ימי המסחר האחרונים"]
+    data = tech.get("data") or {}
+    dec = EN3.decide_v3(x, ind, ent, plan, hist, ev, blockers, tech.get("asset"), held=bool(sym and sym in held_symbols()),
+                        data_level=data.get("level", "partial"))
+    ent["hist"] = hist
+    ent["reliability"] = EN3.reliability(data, ind, ent, hist, tech.get("asset"))
+    ent["code"] = dec["code"]
+    if plan and plan.get("stop"):
+        cfg = load_config()
+        risk = plan["entry"] - plan["stop"]
+        cash = cfg["budget"] * (1 - cfg["cash_buffer_pct"] / 100.0)
+        cap = min(cash, cfg["budget"] * cfg["max_position_pct"] / 100.0)
+        sh = max(0, min(int(cfg["max_loss_per_trade_usd"] // risk), int(cap // plan["entry"])))
+        plan["size"] = {"budget": cfg["budget"], "max_loss_cfg": cfg["max_loss_per_trade_usd"], "shares": sh,
+                        "cost": round(sh * plan["entry"], 2), "risk_usd": round(sh * risk, 2),
+                        "risk_per_1000": round(1000 / plan["entry"] * risk, 2)}
+    return ent, plan, dec
 
 
 _halts = {"t": 0, "v": {}}
@@ -1128,8 +1160,9 @@ def tech_part(sym, force=False):
     if hit and not force and time.time() - hit[0] < CACHE_TTL:
         return hit[1]
     meta, rows = demo_chart(sym) if DEMO else chart(sym)
+    rows, dq_issues = DQ.clean_bars(rows)
     if len(rows) < 60:
-        raise RuntimeError("not enough price history for %s" % sym)
+        raise RuntimeError("not enough price history for %s (%d sessions)" % (sym, len(rows)))
     t = [r[0] for r in rows]
     o, h, l, c, v = ([float(r[i] or 0) for r in rows] for i in range(1, 6))
     tech = technicals(t, o, h, l, c, v)
@@ -1142,6 +1175,27 @@ def tech_part(sym, force=False):
     except Exception as e:
         tech["fx"], tech["overlays"] = None, None
         print("fx failed for %s: %s" % (sym, e))
+    sess = us_session_open()
+    data = DQ.check(rows, meta, session_open=sess, bar_partial=partial)
+    data["issues"] = dq_issues + data["issues"]
+    if any(k == "bad" for k, _ in data["issues"]):
+        data["level"] = "bad"
+    elif data["issues"] and data["level"] == "ok":
+        data["level"] = "partial"
+    data["label"] = DQ.LEVELS[data["level"]]
+    tech["data"] = data
+    tech["live"] = {"price": meta.get("regularMarketPrice"), "session_open": bool(sess and partial)}
+    fx = tech.get("fx")
+    if fx:
+        # one definition everywhere: oscillators and ATR from CLOSED bars (the list, the card and the plan agree)
+        for k in ("rsi", "cci", "atr", "rvol"):
+            if fx.get(k) is not None:
+                tech[k] = round(fx[k], 2)
+        lv = (tech.get("overlays") or {}).get("levels")
+        if lv:
+            tech["levels"] = lv
+            tech["support"] = [{"price": x["price"], "touches": x["touches"]} for x in lv["support"]]
+            tech["resistance"] = [{"price": x["price"], "touches": x["touches"]} for x in lv["resistance"]]
     try:
         tech["asset"] = MK.asset_type(sym, meta)
     except Exception:
@@ -1216,16 +1270,32 @@ def analyze(sym, force=False):
         out["oneil"] = None
         out["errors"].append("ניתוח O'Neil נכשל (%s)" % str(e)[:80])
     out["market"]["oneil"] = (market_ctx() or {}).get("oneil_m")
-    hist, plan2, dec = engine_block(base["tech"], out["fund"], out["sec"], base.get("ext"), out["ind_score"], out["event"])
+    hist, plan2, dec = engine_block(base["tech"], out["fund"], out["sec"], base.get("ext"), out["ind_score"], out["event"], sym=sym)
     if hist is not None:
         out["score_v1"], out["score"], out["plan2"] = out["score"], hist, plan2
-        dec["ext_alerts"] = out["decision"].get("ext_alerts")
+        dec["ext_alerts"] = ext_alerts(base.get("ext"), v1_plan(plan2))
         out["decision_v1"], out["decision"] = out["decision"], dec
+        # one plan on the page: the v1-shaped plan (chart line, Time Machine) is now the v3 plan
+        out["plan"] = v1_plan(plan2)
+        out["tm"] = get_tm(sym, base, out["plan"]) if out["plan"] else None
     _full[sym] = (time.time(), out)
     return out
 
 
 _tm_cache = {}
+
+
+def v1_plan(p):
+    """The v3 plan in the older shape the Time Machine and the alerts read. None without a structural stop."""
+    if not p or not p.get("stop"):
+        return None
+    sz = p.get("size") or {}
+    risk = p["entry"] - p["stop"]
+    return {"trigger": p["entry"], "entry": p["entry"], "stop": p["stop"], "target": p["t2"], "risk_per_share": round(risk, 2),
+            "rr": 3, "horizon": p["horizon"], "shares": sz.get("shares", 0), "cost": sz.get("cost", 0),
+            "max_loss": sz.get("risk_usd", 0), "potential": round(sz.get("shares", 0) * (p["t2"] - p["entry"]), 2),
+            "basis": "תוכנית v3: סטופ מבני, יעד 3R, 10 ימים", "active": True, "resistance_in_way": p.get("res_near") if p.get("res_blocks") else None,
+            "budget": sz.get("budget"), "max_loss_cfg": sz.get("max_loss_cfg")}
 
 
 def get_tm(sym, base, plan):
@@ -1259,9 +1329,9 @@ def quick(sym, force=False):
             dec["code"] = sc["code"]
         if t.get("fx"):
             evq = full.get("event") if full else event_for(sym, a["candles"])
-            hv, _, d2 = engine_block(t, f if f else None, full.get("sec"), a.get("ext"), isc, evq)
+            hv, _, d2 = engine_block(t, f if f else None, full.get("sec"), a.get("ext"), isc, evq, sym=sym)
             sc = hv
-            dec = {"verdict": d2["verdict"], "code": hv["code"], "score": None}
+            dec = {"verdict": d2["verdict"], "code": d2["code"], "score": None}
         return {"symbol": sym, "price": t["price"], "change_1d": t["change_1d"], "change_1m": t["change_1m"],
                 "rsi": t["rsi"], "cci": t["cci"], "rvol": t["rvol"], "trend": t["trend"], "tech_score": t["tech_score"],
                 "verdict": label, "target_up": r2((an["mean"] / t["price"] - 1) * 100, 1) if an.get("mean") else None,
@@ -1271,7 +1341,8 @@ def quick(sym, force=False):
                 "score": sc["value"] if sc else None, "score_label": sc["label"] if sc else None, "act": dec["verdict"], "act_code": d2["code"] if t.get("fx") else None,
                 "event": (evq or {}).get("level") if t.get("fx") else None,
                 "on": ((full.get("oneil") if full else None) or {}).get("status"),
-                "p_profit": sc.get("p_profit") if sc else None, "ind": isc["value"] if isc else None,
+                "p_profit": (sc.get("p_profit") if "p_profit" in sc else (sc.get("hist") or {}).get("p_profit")) if sc else None,
+                "ind": isc["value"] if isc else None, "rel": ((sc or {}).get("reliability") or {}).get("level"),
                 "ext": {k: (a.get("ext") or {}).get(k) for k in ("session", "active", "price", "change", "gap", "volume", "vol_pct")}
                 if (a.get("ext") or {}).get("active") else None}
     except Exception as e:

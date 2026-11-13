@@ -25,6 +25,7 @@ def safe(sym):
 
 def main():
     D.DEMO = "--demo" in sys.argv
+    D.STATIC_BUILD = True  # the public site never reads the local holdings file
     os.makedirs(os.path.join(OUT, "data"), exist_ok=True)
     wl = D.read_watchlist()
     cg = {}
@@ -40,7 +41,7 @@ def main():
             a = D.analyze(sym)
             a["congress"] = cg.get(sym, []) if "_note" not in cg else None
             a["ind_score"] = D.ind_score(a["tech"], a["plan"], a["fund"], a.get("tm"), a["congress"], sector=a.get("sector"))
-            hist, plan2, dec = D.engine_block(a["tech"], a["fund"], a.get("sec"), a.get("ext"), a["ind_score"], a.get("event"))
+            hist, plan2, dec = D.engine_block(a["tech"], a["fund"], a.get("sec"), a.get("ext"), a["ind_score"], a.get("event"), sym=sym)
             if hist is not None:
                 dec["ext_alerts"] = (a.get("decision") or {}).get("ext_alerts")
                 a["score"], a["plan2"], a["decision"] = hist, plan2, dec
@@ -49,7 +50,8 @@ def main():
             q["congress"] = len(a["congress"] or [])
             q["ind"] = a["ind_score"]["value"] if a.get("ind_score") else None
             if hist is not None:
-                q.update(score=hist["value"], score_label=hist["label"], decision_code=hist["code"], act=dec["verdict"], act_code=dec["code"],
+                q.update(score=hist["value"], score_label=hist["label"], decision_code=dec["code"], act=dec["verdict"], act_code=dec["code"],
+                         rel=(hist.get("reliability") or {}).get("level"),
                          event=(a.get("event") or {}).get("level"), on=(a.get("oneil") or {}).get("status"))
             rows.append(q)
             ok += 1
