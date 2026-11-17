@@ -73,6 +73,10 @@ def main():
                       "congress": cg.get("_meta"), "sec": bool(os.environ.get("SEC_USER_AGENT"))}, "rows": rows}
     with open(os.path.join(OUT, "data", "index.json"), "w", encoding="utf-8") as fh:
         json.dump(index, fh, ensure_ascii=False, separators=(",", ":"))
+    scan = os.path.join(HERE, "scan", "scan.json")  # module 2, written by scanner.py (scan.yml)
+    if os.path.exists(scan):
+        import shutil
+        shutil.copyfile(scan, os.path.join(OUT, "data", "scan.json"))
     with open(os.path.join(HERE, "dashboard.html"), encoding="utf-8") as fh:
         html = fh.read()
     html = html.replace('<script src="/lwc.js"></script>',

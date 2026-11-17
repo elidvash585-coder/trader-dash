@@ -827,6 +827,31 @@ def sector_part(fund, t_last_bars):
         return None
 
 
+SCAN_URL = "https://elidvash585-coder.github.io/trader-dash/data/scan.json"
+_scan = {"t": 0, "v": None}
+
+
+def scan_data():
+    """Module 2 (opportunities by sector). scanner.py runs on GitHub twice a day; the local app reads the
+    published result (or scan/scan.json when it was run here). Cached 10 minutes."""
+    if _scan["v"] is None or time.time() - _scan["t"] > 600:
+        doc = None
+        try:
+            doc = json.loads(get(SCAN_URL + "?t=%d" % time.time(), timeout=20))
+        except Exception:
+            pass
+        local = os.path.join(HERE, "scan", "scan.json")
+        if os.path.exists(local):
+            with open(local, encoding="utf-8") as fh:
+                loc = json.load(fh)
+            if not doc or loc.get("generated", "") > doc.get("generated", ""):
+                doc = loc
+        if doc is None:
+            raise RuntimeError("הסריקה עוד לא רצה")
+        _scan.update(t=time.time(), v=doc)
+    return _scan["v"]
+
+
 _pf = {"t": 0, "v": None}
 
 
@@ -1477,6 +1502,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, load_config())
             if u.path == "/api/portfolio":
                 return self.send(200, portfolio_view(force))
+            if u.path == "/api/scan":
+                return self.send(200, scan_data())
             return self.send(404, {"error": "not found"})
         except Exception as e:
             return self.send(500, {"error": str(e)})

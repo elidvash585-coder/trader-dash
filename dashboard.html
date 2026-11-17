@@ -169,12 +169,34 @@ td.n{font-family:var(--mono);direction:ltr;text-align:left}
 .exts{background:linear-gradient(135deg,rgba(140,99,255,.12),transparent);}
 .al{display:grid;gap:6px;margin-top:10px}.al div{padding:7px 10px;border-radius:8px;font-size:12.5px;line-height:1.45;border-right:3px solid}
 .al .warn{background:rgba(245,176,65,.08);border-color:var(--warn);color:#f3d6a0}.al .bad{background:rgba(240,80,110,.08);border-color:var(--down);color:#f6b3c1}.al .info{background:rgba(61,123,253,.08);border-color:var(--acc);color:#c3d3ff}
+.modsw{display:inline-flex;border:1px solid var(--line2);border-radius:9px;overflow:hidden;margin-inline-start:10px}
+.modsw button{border:0;border-radius:0;background:transparent;padding:6px 12px;font-size:12.5px;color:var(--mute)}
+.modsw button.on{background:var(--acc);color:#fff}
+.scan{display:none;grid-template-columns:250px minmax(0,1fr);min-height:calc(100vh - 50px);border-bottom:1px solid var(--line)}
+body.mod-scan .scan{display:grid}body.mod-scan .main,body.mod-scan .bottom,body.mod-scan #srcBox{display:none}
+@media(max-width:600px){.st .x6{display:none}}
+.secs{border-left:1px solid var(--line);overflow:auto;max-height:calc(100vh - 50px)}
+.secs .s{display:grid;grid-template-columns:1fr auto;gap:4px;padding:10px 14px;border-bottom:1px solid rgba(35,43,58,.6);cursor:pointer}
+.secs .s:hover{background:rgba(255,255,255,.03)}.secs .s.sel{background:rgba(61,123,253,.12);border-right:3px solid var(--acc)}
+.secs .s small{grid-column:1/-1;color:var(--dim);font-size:11px}
+.scanm{padding:14px 16px;overflow:auto;max-height:calc(100vh - 50px)}
+.scanh{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px}
+.note{font-size:12px;line-height:1.55;color:var(--mute);background:rgba(245,176,65,.06);border-right:3px solid var(--warn);padding:8px 10px;border-radius:8px;margin-bottom:10px}
+.st{width:100%;border-collapse:collapse;font-size:12.5px}
+.st th{position:sticky;top:0;background:var(--panel);color:var(--dim);font-weight:500;font-size:11px;text-align:right;padding:7px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+.st td{padding:8px 6px;border-bottom:1px solid rgba(35,43,58,.6);vertical-align:middle}
+.st tr.r{cursor:pointer}.st tr.r:hover td{background:rgba(255,255,255,.025)}
+.st .num{font-family:var(--mono);direction:ltr;text-align:right}
+.dchip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:700;white-space:nowrap}
+.st tr.det td{background:var(--bg2);padding:10px 12px}
+@media(max-width:900px){.scan{grid-template-columns:minmax(0,1fr)}.secs{border-left:0;border-bottom:1px solid var(--line);max-height:none;display:flex;overflow-x:auto}.secs .s{min-width:150px;border-bottom:0;border-left:1px solid var(--line)}.scanm{max-height:none;padding:10px}.st .hm{display:none}}
 </style>
 </head>
 <body>
 <div class="top">
   <div class="logo"><i></i>Trader Dash</div>
-  <span class="src"><span class="dot"></span>רשימת מעקב: <b id="srcName">-</b></span>
+  <div class="modsw"><button id="mWl" class="on" onclick="setMod('wl')">רשימת מעקב</button><button id="mScan" onclick="setMod('scan')">הזדמנויות לפי סקטור</button></div>
+  <span class="src" id="srcBox"><span class="dot"></span>רשימת מעקב: <b id="srcName">-</b></span>
   <span class="src" id="regime" style="opacity:.85"></span>
   <div class="sp"></div>
   <span class="src" id="clock"></span>
@@ -204,6 +226,7 @@ td.n{font-family:var(--mono);direction:ltr;text-align:left}
   </aside>
 </div>
 
+<div class="scan" id="scanView"><aside class="secs" id="secs"></aside><section class="scanm" id="scanMain"><div class="loading"><div><div class="spin"></div>טוען...</div></div></section></div>
 <div class="bottom" id="bottom"></div>
 <div class="foot">נתונים: Yahoo Finance (חינמי, לא רשמי, עשוי להתעדכן באיחור). "המלצה" כאן היא תוצאה של כללים טכניים ונתונים מעובדים, לא ייעוץ השקעות.<br>Charts by TradingView Lightweight Charts™</div>
 
@@ -645,6 +668,53 @@ function tick(){try{const ny=new Date().toLocaleTimeString('en-US',{timeZone:'Am
 if(!STATIC){tick();setInterval(tick,30000)}
 if(location.protocol==='file:'){$('#info').innerHTML='<div class="err" style="font-size:15px;line-height:1.8">הקובץ הזה לא נפתח ישירות.<br>בתיקייה <b>Documents\\trader-app</b> לחץ לחיצה כפולה על <b>Trader Dashboard.bat</b>.</div>'}
 else loadList().catch(e=>$('#info').innerHTML='<div class="err">השרת לא עונה ('+e.message+'). ודא שהחלון השחור של Trader Dashboard.bat פתוח.</div>');
+
+/* ---------- module 2: opportunities by sector ---------- */
+const SC={data:null,sec:'all',sort:'rs',open:null};
+function setMod(m){document.body.classList.toggle('mod-scan',m==='scan');$('#mWl').classList.toggle('on',m!=='scan');$('#mScan').classList.toggle('on',m==='scan');
+  try{localStorage.setItem('td_mod',m)}catch(e){}if(m==='scan'&&!SC.data)loadScan()}
+async function loadScan(){try{const r=await fetch(STATIC?'data/scan.json?t='+Date.now():'/api/scan');if(!r.ok)throw new Error('הסריקה עוד לא רצה');SC.data=await r.json();renderScan()}
+  catch(e){$('#scanMain').innerHTML=`<div class="err">${e.message}</div>`}}
+const DC={go:['כניסה אפשרית','var(--up)'],wait:['המתנה','var(--warn)'],no:['לא להיכנס','var(--down)'],reduce:['הקטנה/יציאה','var(--down)']};
+const spk=a=>{if(!a||a.length<2)return'';const mn=Math.min(...a),mx=Math.max(...a),w=90,h=26,p=a.map((v,i)=>`${(i/(a.length-1)*w).toFixed(1)},${(h-(v-mn)/((mx-mn)||1)*h).toFixed(1)}`).join(' ');
+  return `<svg width="${w}" height="${h}" style="direction:ltr"><polyline points="${p}" fill="none" stroke="${a[a.length-1]>=a[0]?'#26c99a':'#f0506e'}" stroke-width="1.5"/></svg>`};
+function renderScan(){const d=SC.data;if(!d)return;
+  const tr={1:['↗','var(--up)'],0:['→','var(--warn)'],'-1':['↘','var(--down)']};
+  $('#secs').innerHTML=[{name:'all',he:'כל הסקטורים',n:d.rows.length,go:d.sectors.reduce((a,s)=>a+s.go,0)}].concat(d.sectors).map(s=>{const t=tr[s.etf_trend];
+    return `<div class="s ${SC.sec===s.name?'sel':''}" onclick="SC.sec='${s.name.replace(/'/g,"\\'")}';SC.open=null;renderScan()"><b>${s.he}</b><span class="num">${s.n}</span>
+      <small>${s.go?`<span class="up">${s.go} כניסה</span> · `:''}${s.etf?`${s.etf} ${t?`<span style="color:${t[1]}">${t[0]}</span>`:''}`:''}</small></div>`}).join('');
+  let rows=d.rows.filter(r=>SC.sec==='all'||r.sector===SC.sec);
+  const o={go:0,wait:1,no:2,reduce:2};
+  const key={rs:r=>-(r.rs??0),x3:r=>-((r.excess||{})['3m']??-999),dec:r=>(o[(r.decision||{}).code]??3)*100-(r.entry??0),high:r=>r.from_high??99,rev:r=>-(r.rev_yoy??-999)}[SC.sort];
+  rows=[...rows].sort((a,b)=>key(a)-key(b));
+  const ex=v=>v==null?'—':`<span class="${cls(v)}">${v>0?'+':''}${fmt(v,0)}</span>`;
+  const sesLbl={pre_market:'לפני הפתיחה',after_close:'אחרי הסגירה',session:'במהלך המסחר'}[d.session]||'';
+  const cnt=rows.reduce((a,r)=>{const c=(r.decision||{}).code;a[c==='reduce'?'no':c]=(a[c==='reduce'?'no':c]||0)+1;return a},{});
+  $('#scanMain').innerHTML=`<div class="scanh"><div><h2 style="margin:0;font-size:18px">${SC.sec==='all'?'כל הסקטורים':(d.sectors.find(s=>s.name===SC.sec)||{}).he||SC.sec} <span class="dim" style="font-size:13px">${rows.length} מניות</span></h2>
+      <div class="dim" style="font-size:11.5px;margin-top:3px">סריקה ${sesLbl}: ${d.generated} · סגירה ${d.as_of} · שוק לפי O'Neil (חישוב עצמאי): <b>${d.market.oneil||'—'}</b> · <span class="up">${cnt.go||0} כניסה</span> · <span class="warn">${cnt.wait||0} המתנה</span> · <span class="down">${cnt.no||0} לא</span></div></div>
+    <select onchange="SC.sort=this.value;renderScan()">${[['rs','לפי RS פנימי'],['dec','לפי החלטה'],['x3','לפי עודף 3 חודשים'],['high','קרוב לשיא'],['rev','לפי צמיחת הכנסות']].map(([k,l])=>`<option value="${k}" ${SC.sort===k?'selected':''}>${l}</option>`).join('')}</select></div>
+   <div class="note">הרשימה מציגה את המניות <b>החזקות</b> בכל סקטור, מתוך ${(d.liquid||0).toLocaleString()} מניות סחירות בארה"ב (מחיר מעל $${d.criteria.min_price}, מחזור יומי מעל $${d.criteria.min_dollar_volume/1e6}M): RS פנימי ${d.criteria.min_rs}+ מול כל השוק, מעל ממוצעי 50 ו-200, ועד ${d.criteria.max_from_high}% מהשיא השנתי. זה דירוג חוזק שאפשר לאמת, <b>לא תחזית ולא המלצת קנייה</b>. ההחלטה ליד כל מניה היא של אותו מנוע כמו רשימת המעקב. במחקר על כל השוק, חוזק ומגמה לבדם לא נתנו יתרון על כניסה ביום אקראי.</div>
+   <div style="overflow-x:auto"><table class="st"><thead><tr><th>מניה</th><th>מחיר</th><th class="hm">60 יום</th><th title="דירוג שלנו מול כל השוק, לא IBD">RS פנימי</th><th title="נקודות אחוז מעל S&P 500">עודף 3·6·12ח'</th><th class="hm">משיא</th><th class="hm">הכנסות שנה/שנה</th><th class="hm">דוח</th><th class="hm">O'Neil</th><th>החלטה</th></tr></thead><tbody>
+   ${rows.map(r=>{const dc=r.decision||{},c=DC[dc.code]||['—','var(--mute)'],x=r.excess||{},op=SC.open===r.sym;
+     return `<tr class="r" onclick="SC.open=SC.open==='${r.sym}'?null:'${r.sym}';renderScan()"><td><b>${r.sym}</b><div class="dim" style="font-size:11px;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.name||''}${SC.sec==='all'?' · '+((d.sectors.find(s=>s.name===r.sector)||{}).he||''):''}</div></td>
+       <td class="num">${fmt(r.price)}<div class="${cls(r.chg1)}" style="font-size:11px">${pct(r.chg1)}</div>${r.ext&&r.ext.price?`<span class="extc">${r.ext.session==='pre'?'PM':'AH'} ${pct(r.ext.change,1)}</span>`:''}</td>
+       <td class="hm">${spk(r.spark)}</td><td class="num"><b class="${r.rs>=90?'up':''}">${fmt(r.rs,0)}</b></td>
+       <td class="num" style="white-space:nowrap">${ex(x['3m'])} · ${ex(x['6m'])} · ${ex(x['12m'])}</td>
+       <td class="num hm">-${fmt(r.from_high,0)}%</td>
+       <td class="num hm" title="${r.rev_src||''}">${r.rev_yoy==null?'—':`<span class="${cls(r.rev_yoy)}">${r.rev_yoy>0?'+':''}${fmt(r.rev_yoy,0)}%</span>`}</td>
+       <td class="num hm">${r.earnings_days==null?'—':r.earnings_days<0?'—':`<span class="${r.earnings_days<=14?'warn':''}">${r.earnings_days} ימ'</span>`}</td>
+       <td class="hm" style="font-size:11.5px;max-width:150px">${(r.on||{}).status_he?`<span title="${r.on.status_he}">${r.on.status_he.split(':')[0]}</span>`:'—'}</td>
+       <td><span class="dchip" style="color:${c[1]};border:1px solid ${c[1]}">${c[0]}</span></td></tr>
+       ${op?`<tr class="det"><td colspan="10"><div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;font-size:12.5px;line-height:1.55">
+         <div><b style="color:${c[1]}">${dc.verdict||'—'}</b>${dc.why?`<div class="dim">${dc.why}</div>`:''}
+           ${r.plan?`<div class="kvs" style="margin-top:6px"><div><label>כניסה</label><b>${fmt(r.plan.entry)}</b></div><div><label>סטופ</label><b class="down">${fmt(r.plan.stop)} (-${fmt(r.plan.stop_pct,1)}%)</b></div><div><label>יעד 1 · 2</label><b class="up">${r.plan.t1?fmt(r.plan.t1):'—'} · ${fmt(r.plan.t2)}</b></div><div><label>סיכוי/סיכון</label><b>${fmt(r.plan.rr,1)}:1</b></div></div>`:''}
+           <div class="dim" style="margin-top:6px">ציון כניסה ${fmt(r.entry,1)} · ציון טכני ${fmt(r.tech,1)} (במחקר שניהם לא ניבאו רווח) · אמינות: ${r.reliability||'—'}</div></div>
+         <div>${r.industry?`<div>${r.industry}</div>`:''}<div class="dim">O'Neil: ${(r.on||{}).status_he||'—'}${(r.on||{}).pivot?` · Pivot ${fmt(r.on.pivot)}`:''}${(r.on||{}).canslim?` · עומדת ב: ${r.on.canslim.split('').join(', ')}`:''}</div>
+           <div class="dim">${r.profitable===false?'הפסד נקי ברבעון האחרון · ':''}${r.eps_yoy!=null?`רווח שנה/שנה ${r.eps_yoy>0?'+':''}${fmt(r.eps_yoy,0)}% · `:''}מחזור יומי $${fmt(r.dollar_vol_m,0)}M</div>
+           <div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap"><a href="https://www.tradingview.com/chart/?symbol=${r.sym}" target="_blank" rel="noopener" style="color:var(--acc)">TradingView ↗</a>${STATIC?'':`<button onclick="event.stopPropagation();addFromScan('${r.sym}')">+ לרשימת המעקב</button>`}</div></div></div></td></tr>`:''}`}).join('')}
+   </tbody></table></div>${rows.length?'':'<p class="dim" style="margin-top:12px">אין מניות שעברו את הסינון בסקטור הזה.</p>'}`}
+async function addFromScan(s){const wl=await api('/api/watchlist');if(!wl.symbols.includes(s))wl.symbols.push(s);await post('/api/watchlist',wl);state.sel=s;setMod('wl');loadList()}
+try{if(localStorage.getItem('td_mod')==='scan')setTimeout(()=>setMod('scan'),0)}catch(e){}
 </script>
 </body>
 </html>
