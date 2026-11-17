@@ -1,0 +1,40 @@
+name: Sector scan
+
+# Module 2 (opportunities by sector): after the US close and before the open, on closed daily bars.
+on:
+  schedule:
+    - cron: "25 21 * * 1-5"   # UTC: 16:25 New York in winter (17:25 in summer), after the close
+    - cron: "5 12 * * 1-5"    # UTC: 07:05 New York in winter (08:05 in summer), before the open
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q numpy pandas
+      - name: Scan the US market
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+        run: python scanner.py
+      - name: Save the scan in the repository
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: Sector scan
+          file_pattern: scan/scan.json research/rs_reference_universe.json
+      - name: Publish it on the site now
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run update.yml --ref main || echo "the next scheduled build will publish it"
