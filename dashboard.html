@@ -670,7 +670,9 @@ if(location.protocol==='file:'){$('#info').innerHTML='<div class="err" style="fo
 else loadList().catch(e=>$('#info').innerHTML='<div class="err">השרת לא עונה ('+e.message+'). ודא שהחלון השחור של Trader Dashboard.bat פתוח.</div>');
 
 /* ---------- module 2: opportunities by sector ---------- */
-const SC={data:null,sec:'all',sort:'rs',open:null};
+const SC={data:null,sec:'all',sort:'rs',open:null,dec:'all'};
+try{SC.dec=localStorage.getItem('td_scdec')||'all'}catch(e){}
+function setDec(k){SC.dec=k;SC.open=null;try{localStorage.setItem('td_scdec',k)}catch(e){}renderScan()}
 function setMod(m){document.body.classList.toggle('mod-scan',m==='scan');$('#mWl').classList.toggle('on',m!=='scan');$('#mScan').classList.toggle('on',m==='scan');
   try{localStorage.setItem('td_mod',m)}catch(e){}if(m==='scan'&&!SC.data)loadScan()}
 async function loadScan(){try{const r=await fetch(STATIC?'data/scan.json?t='+Date.now():'/api/scan');if(!r.ok)throw new Error('הסריקה עוד לא רצה');SC.data=await r.json();renderScan()}
@@ -690,9 +692,11 @@ function renderScan(){const d=SC.data;if(!d)return;
   const ex=v=>v==null?'—':`<span class="${cls(v)}">${v>0?'+':''}${fmt(v,0)}</span>`;
   const sesLbl={pre_market:'לפני הפתיחה',after_close:'אחרי הסגירה',session:'במהלך המסחר'}[d.session]||'';
   const cnt=rows.reduce((a,r)=>{const c=(r.decision||{}).code;a[c==='reduce'?'no':c]=(a[c==='reduce'?'no':c]||0)+1;return a},{});
+  const all=rows.length;if(SC.dec!=='all')rows=rows.filter(r=>{const c=(r.decision||{}).code;return (c==='reduce'?'no':c)===SC.dec});
+  const decBtns=`<div class="flt">${[['all','הכל',all],['go','כניסה',cnt.go||0],['wait','המתנה',cnt.wait||0],['no','לא להיכנס',cnt.no||0]].map(([k,l,n])=>`<button class="${SC.dec===k?'on':''}" onclick="setDec('${k}')">${l} ${n}</button>`).join('')}</div>`;
   $('#scanMain').innerHTML=`<div class="scanh"><div><h2 style="margin:0;font-size:18px">${SC.sec==='all'?'כל הסקטורים':(d.sectors.find(s=>s.name===SC.sec)||{}).he||SC.sec} <span class="dim" style="font-size:13px">${rows.length} מניות</span></h2>
       <div class="dim" style="font-size:11.5px;margin-top:3px">סריקה ${sesLbl}: ${d.generated} · סגירה ${d.as_of} · שוק לפי O'Neil (חישוב עצמאי): <b>${d.market.oneil||'—'}</b> · <span class="up">${cnt.go||0} כניסה</span> · <span class="warn">${cnt.wait||0} המתנה</span> · <span class="down">${cnt.no||0} לא</span></div></div>
-    <select onchange="SC.sort=this.value;renderScan()">${[['rs','לפי RS פנימי'],['dec','לפי החלטה'],['x3','לפי עודף 3 חודשים'],['high','קרוב לשיא'],['rev','לפי צמיחת הכנסות']].map(([k,l])=>`<option value="${k}" ${SC.sort===k?'selected':''}>${l}</option>`).join('')}</select></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${decBtns}<select onchange="SC.sort=this.value;renderScan()">${[['rs','לפי RS פנימי'],['dec','לפי החלטה'],['x3','לפי עודף 3 חודשים'],['high','קרוב לשיא'],['rev','לפי צמיחת הכנסות']].map(([k,l])=>`<option value="${k}" ${SC.sort===k?'selected':''}>${l}</option>`).join('')}</select></div></div>
    <div class="note">הרשימה מציגה את המניות <b>החזקות</b> בכל סקטור, מתוך ${(d.liquid||0).toLocaleString()} מניות סחירות בארה"ב (מחיר מעל $${d.criteria.min_price}, מחזור יומי מעל $${d.criteria.min_dollar_volume/1e6}M): RS פנימי ${d.criteria.min_rs}+ מול כל השוק, מעל ממוצעי 50 ו-200, ועד ${d.criteria.max_from_high}% מהשיא השנתי. זה דירוג חוזק שאפשר לאמת, <b>לא תחזית ולא המלצת קנייה</b>. ההחלטה ליד כל מניה היא של אותו מנוע כמו רשימת המעקב. במחקר על כל השוק, חוזק ומגמה לבדם לא נתנו יתרון על כניסה ביום אקראי.</div>
    <div style="overflow-x:auto"><table class="st"><thead><tr><th>מניה</th><th>מחיר</th><th class="hm">60 יום</th><th title="דירוג שלנו מול כל השוק, לא IBD">RS פנימי</th><th title="נקודות אחוז מעל S&P 500">עודף 3·6·12ח'</th><th class="hm">משיא</th><th class="hm">הכנסות שנה/שנה</th><th class="hm">דוח</th><th class="hm">O'Neil</th><th>החלטה</th></tr></thead><tbody>
    ${rows.map(r=>{const dc=r.decision||{},c=DC[dc.code]||['—','var(--mute)'],x=r.excess||{},op=SC.open===r.sym;
@@ -712,7 +716,7 @@ function renderScan(){const d=SC.data;if(!d)return;
          <div>${r.industry?`<div>${r.industry}</div>`:''}<div class="dim">O'Neil: ${(r.on||{}).status_he||'—'}${(r.on||{}).pivot?` · Pivot ${fmt(r.on.pivot)}`:''}${(r.on||{}).canslim?` · עומדת ב: ${r.on.canslim.split('').join(', ')}`:''}</div>
            <div class="dim">${r.profitable===false?'הפסד נקי ברבעון האחרון · ':''}${r.eps_yoy!=null?`רווח שנה/שנה ${r.eps_yoy>0?'+':''}${fmt(r.eps_yoy,0)}% · `:''}מחזור יומי $${fmt(r.dollar_vol_m,0)}M</div>
            <div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap"><a href="https://www.tradingview.com/chart/?symbol=${r.sym}" target="_blank" rel="noopener" style="color:var(--acc)">TradingView ↗</a>${STATIC?'':`<button onclick="event.stopPropagation();addFromScan('${r.sym}')">+ לרשימת המעקב</button>`}</div></div></div></td></tr>`:''}`}).join('')}
-   </tbody></table></div>${rows.length?'':'<p class="dim" style="margin-top:12px">אין מניות שעברו את הסינון בסקטור הזה.</p>'}`}
+   </tbody></table></div>${rows.length?'':`<p class="dim" style="margin-top:12px">${SC.dec==='all'?'אין מניות שעברו את הסינון בסקטור הזה.':'אין מניות עם ההחלטה הזו בסקטור הזה.'}</p>`}`}
 async function addFromScan(s){const wl=await api('/api/watchlist');if(!wl.symbols.includes(s))wl.symbols.push(s);await post('/api/watchlist',wl);state.sel=s;setMod('wl');loadList()}
 try{if(localStorage.getItem('td_mod')==='scan')setTimeout(()=>setMod('scan'),0)}catch(e){}
 </script>

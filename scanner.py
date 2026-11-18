@@ -38,6 +38,93 @@ import secpit  # noqa: E402
 OUT_DIR = os.path.join(HERE, "scan")
 MIN_RS, MAX_FROM_HIGH, MAX_CANDIDATES = 80, 25.0, 400
 SECTOR_ETF = dict(MK.SECTOR_ETF)
+SESSION_OPEN = False
+
+
+NASDAQ_SECTOR = {"Technology": "Technology", "Health Care": "Healthcare", "Finance": "Financial Services",
+                 "Consumer Discretionary": "Consumer Cyclical", "Industrials": "Industrials", "Energy": "Energy",
+                 "Real Estate": "Real Estate", "Utilities": "Utilities", "Basic Materials": "Basic Materials",
+                 "Telecommunications": "Communication Services", "Consumer Staples": "Consumer Defensive"}
+
+
+def sic_sector(sic):
+    """SEC SIC code -> the sector names the site uses (Yahoo's). Coarse, only a fallback."""
+    try:
+        x = int(sic)
+    except (TypeError, ValueError):
+        return None
+    if 2833 <= x <= 2836 or 3841 <= x <= 3845 or 3851 <= x <= 3851 or 8000 <= x <= 8099 or x == 5047 or x == 5122:
+        return "Healthcare"
+    if 3570 <= x <= 3579 or 3661 <= x <= 3679 or 3820 <= x <= 3829 or 7370 <= x <= 7379:
+        return "Technology"
+    if x in (6798,) or 6500 <= x <= 6553:
+        return "Real Estate"
+    if 6000 <= x <= 6799:
+        return "Financial Services"
+    if 1300 <= x <= 1399 or 2900 <= x <= 2999 or x in (4610, 4612, 4613, 4922, 4923):
+        return "Energy"
+    if 4900 <= x <= 4991:
+        return "Utilities"
+    if 4800 <= x <= 4899 or 2710 <= x <= 2741 or 7810 <= x <= 7841:
+        return "Communication Services"
+    if 1000 <= x <= 1499 or 2600 <= x <= 2679 or 2800 <= x <= 2829 or 2860 <= x <= 2899 or 3300 <= x <= 3399:
+        return "Basic Materials"
+    if 2000 <= x <= 2199 or 2840 <= x <= 2844 or 5400 <= x <= 5499 or 5140 <= x <= 5149:
+        return "Consumer Defensive"
+    if 2300 <= x <= 2399 or 3710 <= x <= 3716 or 5000 <= x <= 5999 or 7000 <= x <= 7099 or 7900 <= x <= 7999 or 2500 <= x <= 2599:
+        return "Consumer Cyclical"
+    if 1500 <= x <= 1799 or 3400 <= x <= 3899 or 4000 <= x <= 4799 or 8700 <= x <= 8799 or 7300 <= x <= 7389:
+        return "Industrials"
+    return None
+
+
+def sectors_for(syms, ua):
+    """{sym: {"sector", "industry", "name", "src"}}: Nasdaq's public stock screener (one call, all US listings),
+    then SEC SIC codes for whatever is still missing. Never guessed: unknown stays unknown."""
+    out = {}
+    if D.DEMO:
+        return out
+    try:
+        doc = json.loads(D.get("https://api.nasdaq.com/api/screener/stocks?tableonly=true&limit=25&offset=0&download=true", timeout=40))
+        for r in (doc.get("data") or {}).get("rows") or []:
+            sec = NASDAQ_SECTOR.get((r.get("sector") or "").strip())
+            if sec:
+                out[r["symbol"].strip().replace("/", "-").replace("^", "-")] = {
+                    "sector": sec, "industry": (r.get("industry") or "").strip() or None, "name": r.get("name"), "src": "Nasdaq"}
+    except Exception as e:
+        print("Nasdaq screener unavailable: %s" % str(e)[:80], flush=True)
+    miss = [s for s in syms if s not in out]
+    if miss and ua:
+        try:
+            tick = B4._sec_get("https://www.sec.gov/files/company_tickers.json", ua)
+            cik = {v["ticker"].upper(): str(v["cik_str"]).zfill(10) for v in tick.values()}
+            for s in miss:
+                k = cik.get(s.upper().replace("-", "."), cik.get(s.upper()))
+                if not k:
+                    continue
+                try:
+                    sub = B4._sec_get("https://data.sec.gov/submissions/CIK%s.json" % k, ua)
+                    sec = sic_sector(sub.get("sic"))
+                    if sec:
+                        out[s] = {"sector": sec, "industry": sub.get("sicDescription"), "name": sub.get("name"), "src": "SEC SIC"}
+                except Exception:
+                    continue
+        except Exception:
+            pass
+    return {s: out[s] for s in syms if s in out}
+
+
+def fund_of(sym):
+    """Yahoo fundamentals with a retry: the crumb service throttles bursts."""
+    if D.DEMO:
+        return D.demo_fund(sym, 100.0)
+    for k in range(3):
+        try:
+            return D.fundamentals(sym)
+        except Exception:
+            D._crumb["fail"] = 0  # let the next try fetch a fresh crumb instead of waiting 2 minutes
+            time.sleep(4 * (k + 1))
+    return None
 
 
 def bars(sym):
@@ -53,6 +140,8 @@ def bars(sym):
                 rows = None
         if not rows:
             return sym, None
+    if SESSION_OPEN and rows and datetime.datetime.fromtimestamp(rows[-1][0], D.DQ.NY).date() == datetime.datetime.now(D.DQ.NY).date():
+        rows = rows[:-1]  # today's bar is still trading: closed bars only, like the rest of the site
     if len(rows) < 60:
         return sym, None
     a = np.asarray([r[:6] for r in rows], dtype=float)
@@ -118,14 +207,14 @@ def why_of(dec):
     return (other or dec.get("missing") or [""])[0]
 
 
-def entry_view(sym, m, growth):
+def entry_view(sym, m, growth, secinfo=None):
     """The watchlist engine on one stock (closed bars), compacted for the scanner."""
     base = D.tech_part(sym)
     tech = base["tech"]
-    try:
-        fund = D.demo_fund(sym, tech["price"]) if D.DEMO else D.fundamentals(sym)
-    except Exception:
-        fund = None
+    fund = fund_of(sym)
+    si = secinfo or {}
+    if si.get("sector") and not (fund or {}).get("sector"):
+        fund = dict(fund or {}, sector=si["sector"], industry=si.get("industry"), name=(fund or {}).get("name") or si.get("name"))
     cs = base["candles"]
     sector = D.sector_part(fund, ([x[0] for x in cs], [x[4] for x in cs])) if fund else None
     ind = D.ind_score(tech, None, fund, None, sector=sector)
@@ -149,6 +238,7 @@ def entry_view(sym, m, growth):
     row["price"] = round(row["price"], 2)
     row["dollar_vol_m"] = round(row.pop("dollar_vol") / 1e6, 1)
     row.update(name=f.get("name"), sector=f.get("sector") or "לא ידוע", industry=f.get("industry"),
+               sector_src="Yahoo" if (fund or {}).get("sector") and not si.get("sector") else si.get("src"), fund_ok=bool(fund and fund.get("next_earnings") is not None or (fund or {}).get("rev_growth") is not None),
                sector_etf=SECTOR_ETF.get(f.get("sector") or ""), market_cap=f.get("market_cap"),
                rev_yoy=round(g["rev_yoy"] * 100, 1) if g.get("rev_yoy") is not None else (round(f["rev_growth"] * 100, 1) if f.get("rev_growth") is not None else None),
                rev_src="SEC" if g.get("rev_yoy") is not None else ("Yahoo" if f.get("rev_growth") is not None else None),
@@ -165,8 +255,10 @@ def entry_view(sym, m, growth):
 
 
 def main():
+    global SESSION_OPEN
     D.DEMO = "--demo" in sys.argv
     D.STATIC_BUILD = True
+    SESSION_OPEN = D.us_session_open() and not D.DEMO
     os.makedirs(OUT_DIR, exist_ok=True)
     t0 = time.time()
     syms = B6.universe()
@@ -200,11 +292,13 @@ def main():
     print("pass the quality screen: %d (%.0fs)" % (len(q), time.time() - t0), flush=True)
     growth = sec_growth(q.sym.tolist(), os.environ.get("SEC_USER_AGENT"))
     print("SEC growth for %d (%.0fs)" % (len(growth), time.time() - t0), flush=True)
+    secinfo = sectors_for(q.sym.tolist(), os.environ.get("SEC_USER_AGENT"))
+    print("sectors for %d of %d (%.0fs)" % (len(secinfo), len(q), time.time() - t0), flush=True)
     D.market_ctx()
     rows, fails = [], 0
     recs = q.to_dict("records")
-    with cf.ThreadPoolExecutor(max_workers=1 if D.DEMO else 4) as ex:
-        futs = {ex.submit(entry_view, r["sym"], r, growth.get(r["sym"])): r["sym"] for r in recs}
+    with cf.ThreadPoolExecutor(max_workers=1 if D.DEMO else 2) as ex:
+        futs = {ex.submit(entry_view, r["sym"], r, growth.get(r["sym"]), secinfo.get(r["sym"])): r["sym"] for r in recs}
         for f in cf.as_completed(futs):
             try:
                 rows.append(f.result())
@@ -240,6 +334,7 @@ def main():
     out = {"generated": now.strftime("%Y-%m-%d %H:%M UTC"), "as_of": asof, "session": session, "demo": D.DEMO,
            "universe": len(syms), "with_bars": int(len(df)), "with_rs": int(len(ref)), "liquid": int(df.liquid.sum()),
            "passed": int(len(q)), "shown": len(rows), "failed": fails, "runtime_s": round(time.time() - t0),
+           "fund_ok": sum(1 for r in rows if r.get("fund_ok")), "closed_bars_only": True,
            "criteria": {"min_rs": MIN_RS, "max_from_high": MAX_FROM_HIGH, "min_price": B6.MIN_PRICE,
                         "min_dollar_volume": B6.MIN_DOLLAR_VOL, "above_sma50": True, "above_sma200": True},
            "market": {"regime": (m.get("regime") or {}).get("label"), "oneil": (m.get("oneil_m") or {}).get("label"),
