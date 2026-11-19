@@ -1092,13 +1092,51 @@ def news(sym):
     return out[:12]
 
 
+class ShortHistory(RuntimeError):
+    """Fewer than 60 daily bars: a new listing (or data we could not recover). No analysis, no scores."""
+    def __init__(self, sym, n, meta):
+        super().__init__("not enough price history for %s (%d sessions)" % (sym, n))
+        self.n, self.meta = n, meta or {}
+
+
 def chart(sym):
     doc = yahoo("/v8/finance/chart/%s?range=2y&interval=1d&includePrePost=false" % ysym(sym))
     res = doc["chart"]["result"][0]
     q = res["indicators"]["quote"][0]
-    rows = [(t, o, h, l, c, v) for t, o, h, l, c, v in zip(res["timestamp"], q["open"], q["high"], q["low"], q["close"], q["volume"])
+    rows = [(t, o, h, l, c, v) for t, o, h, l, c, v in zip(res.get("timestamp") or [], q["open"], q["high"], q["low"], q["close"], q["volume"])
             if None not in (o, h, l, c)]
-    return res.get("meta", {}), rows
+    meta = res.get("meta", {})
+    first = meta.get("firstTradeDate")
+    if len(rows) < 60 and first and time.time() - first > 120 * 86400:
+        # Yahoo sometimes cuts a stock's daily history (SNDK in Nov 2026: 3 bars for a 2025 listing) while its
+        # hourly bars are intact. Rebuild the daily bars from the hourly ones, and say so (dataqa marks it partial).
+        try:
+            hr = daily_from_hourly(sym)
+        except Exception:
+            hr = []
+        if len(hr) > len(rows):
+            meta, rows = dict(meta, _rebuilt="hourly", _daily_bars=len(rows)), hr
+    return meta, rows
+
+
+def daily_from_hourly(sym):
+    import zoneinfo
+    ny = zoneinfo.ZoneInfo("America/New_York")
+    doc = yahoo("/v8/finance/chart/%s?range=730d&interval=1h&includePrePost=false" % ysym(sym))
+    res = doc["chart"]["result"][0]
+    q = res["indicators"]["quote"][0]
+    days = {}
+    for i, t in enumerate(res.get("timestamp") or []):
+        o, h, l, c, v = q["open"][i], q["high"][i], q["low"][i], q["close"][i], q["volume"][i]
+        if None in (o, h, l, c):
+            continue
+        d = datetime.datetime.fromtimestamp(t, ny).date()
+        x = days.get(d)
+        if x is None:
+            days[d] = [t, o, h, l, c, v or 0]
+        else:
+            x[2], x[3], x[4], x[5] = max(x[2], h), min(x[3], l), c, x[5] + (v or 0)
+    return [tuple(days[d]) for d in sorted(days)]
 
 
 def extended(sym, avg_vol=None):
@@ -1197,7 +1235,7 @@ def tech_part(sym, force=False):
     meta, rows = demo_chart(sym) if DEMO else chart(sym)
     rows, dq_issues = DQ.clean_bars(rows)
     if len(rows) < 60:
-        raise RuntimeError("not enough price history for %s (%d sessions)" % (sym, len(rows)))
+        raise ShortHistory(sym, len(rows), meta)
     t = [r[0] for r in rows]
     o, h, l, c, v = ([float(r[i] or 0) for r in rows] for i in range(1, 6))
     tech = technicals(t, o, h, l, c, v)
@@ -1381,6 +1419,13 @@ def quick(sym, force=False):
                 "ext": {k: (a.get("ext") or {}).get(k) for k in ("session", "active", "price", "change", "gap", "volume", "vol_pct")}
                 if (a.get("ext") or {}).get("active") else None}
     except Exception as e:
+        if isinstance(e, ShortHistory):
+            m = e.meta
+            first = m.get("firstTradeDate")
+            return {"symbol": sym, "short": e.n, "price": m.get("regularMarketPrice"), "name": m.get("longName") or m.get("shortName"),
+                    "listed": datetime.datetime.utcfromtimestamp(first).strftime("%Y-%m-%d") if first else None,
+                    "error": "רק %d ימי מסחר%s. ניתוח וציונים יוצגו אחרי 60 ימי מסחר, בלי השלמה מוערכת" % (
+                        e.n, " (נסחרת מ-%s)" % datetime.datetime.utcfromtimestamp(first).strftime("%d.%m.%Y") if first else "")}
         return {"symbol": sym, "error": str(e)[:120]}
 
 

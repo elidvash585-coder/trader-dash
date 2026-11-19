@@ -94,6 +94,8 @@ def check(rows, meta=None, now=None, session_open=False, bar_partial=False):
         live_age = (now.timestamp() - live_t) / 60
         if session_open and live_age > 30:
             issues.append(("warn", "המחיר החי לא התעדכן %d דקות" % live_age))
+    if meta.get("_rebuilt") == "hourly":
+        issues.append(("warn", "Yahoo החזיר רק %d נרות יומיים; הנרות היומיים שוחזרו מנתונים שעתיים (סגירה לפי המסחר הרגיל, ייתכן הבדל קטן מהסגירה הרשמית)" % meta.get("_daily_bars", 0)))
     level = "bad" if any(k == "bad" for k, _ in issues) else "partial" if issues else "ok"
     return {"level": level, "label": LEVELS[level], "issues": issues, "bars": n,
             "first_bar": datetime.datetime.fromtimestamp(rows[0][0], NY).date().isoformat(),

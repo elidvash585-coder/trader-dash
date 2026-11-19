@@ -240,3 +240,22 @@ class RsScope(unittest.TestCase):
         self.assertTrue(L({"scope": "universe", "n": 5000, "date": "2026-11-12"})["ok"])
         self.assertIsNone(L({"scope": "narrow", "label": "87 מניות גדולות בלבד"})["ok"])  # not comparable to IBD's 80
         self.assertIn("לא דירוג IBD", L({"scope": "universe", "n": 5000})["detail"])
+
+
+class HourlyRebuild(unittest.TestCase):
+    def test_daily_bars_from_hourly(self):
+        import dashboard as D
+        t0 = int(datetime.datetime(2026, 11, 16, 14, 30, tzinfo=datetime.timezone.utc).timestamp())  # 9:30 New York
+        ts = [t0 + k * 3600 for k in range(7)] + [t0 + 86400 + k * 3600 for k in range(7)]
+        px = [10, 11, 12, 9, 10, 11, 12, 20, 21, 19, 22, 20, 21, 23]
+        doc = {"chart": {"result": [{"timestamp": ts, "indicators": {"quote": [
+            {"open": px, "high": [p + 0.5 for p in px], "low": [p - 0.5 for p in px], "close": px, "volume": [100] * 14}]}}]}}
+        old = D.yahoo
+        D.yahoo = lambda path: doc
+        try:
+            rows = D.daily_from_hourly("X")
+        finally:
+            D.yahoo = old
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0][1:], (10, 12.5, 8.5, 12, 700))
+        self.assertEqual(rows[1][0], t0 + 86400)

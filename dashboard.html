@@ -299,7 +299,7 @@ function renderWL(){
   $('#wlist').innerHTML=rows.map(r=>{const sel=r.symbol===state.sel?'sel':'';
     const x=`<span class="x" title="הסר" onclick="event.stopPropagation();rmSym('${r.symbol}')">✕</span>`;
     if(r.loading)return `<div class="wr ${sel}" onclick="select('${r.symbol}')"><div class="s"><b>${r.symbol}</b><small>טוען...</small></div><div class="p dim">···</div><div class="rec ld">···</div><div class="rec ld">···</div>${x}</div>`;
-    if(r.error)return `<div class="wr ${sel}" onclick="select('${r.symbol}')"><div class="s"><b>${r.symbol}</b><small class="warn">אין נתונים</small></div><div class="p dim">—</div><div class="rec ld">—</div><div class="rec ld">—</div>${x}</div>`;
+    if(r.error)return `<div class="wr ${sel}" onclick="select('${r.symbol}')" title="${r.error}"><div class="s"><b>${r.symbol}</b><small class="warn">${r.short!=null?(r.short<=5?'הנפקה חדשה':'היסטוריה קצרה')+' · '+r.short+' ימים':'אין נתונים'}</small></div><div class="p ${r.price!=null?'':'dim'}">${r.price!=null?fmt(r.price):'—'}</div><div class="rec ld">—</div><div class="rec ld">—</div>${x}</div>`;
     return `<div class="wr ${sel}" onclick="select('${r.symbol}')"><div class="s"><b>${r.symbol}</b>${r.event==='critical'?'<span class="evx" title="אירוע מהותי: פרטים בלוח המניה">⚠</span>':''}${r.congress?`<span class="badge" title="עסקאות חברי קונגרס ב-90 יום">🏛 ${r.congress}</span>`:''}<small>${r.name||('תעלה '+r.channel)}</small></div>
       <div class="p">${fmt(r.price)}<small class="${cls(r.change_1d)}">${pct(r.change_1d)}</small>${r.ext?`<span class="extc ${r.ext.gap?'gap':''}" title="${r.ext.session==='pre'?'Pre-market':'After-hours'} ${fmt(r.ext.price)}">${r.ext.gap?'⚡':''}${r.ext.session==='pre'?'PM':'AH'} ${pct(r.ext.change,1)}</span>`:''}</div>
       <div class="rec" style="color:${scCol(r.score)};border-color:${scCol(r.score)};font-family:var(--mono);font-size:13px" title="ציון כניסה: ${r.score_label||'N/A'}${r.act?' · '+r.act:''}${r.rel?' · אמינות: '+({ok:'מאומת',partial:'חלקי',bad:'לא מאומת'}[r.rel]||''):''}">${r.score!=null?fmt(r.score,1):'—'}</div>
@@ -313,7 +313,9 @@ async function select(sym,force){if(!sym)return;state.sel=sym;renderWL();
   $('#info').innerHTML='<div class="loading"><div><div class="spin"></div>מנתח את '+sym+'...</div></div>';$('#sh').innerHTML=`<h1>${sym}</h1>`;$('#bottom').innerHTML='';
   try{const d=await api('/api/analyze?symbol='+encodeURIComponent(sym)+(force?'&refresh=1':''));if(state.sel!==sym)return;state.data=d;renderAll();
     api('/api/quick?symbol='+encodeURIComponent(sym)).then(r=>{const k=state.rows.findIndex(x=>x.symbol===sym);if(k>=0){state.rows[k]=r;renderWL()}}).catch(()=>{})}
-  catch(e){$('#info').innerHTML='<div class="err">לא הצלחתי לנתח את '+sym+': '+e.message+'</div>'}}
+  catch(e){const row=(state.rows||[]).find(x=>x.symbol===sym)||{};
+    $('#info').innerHTML=row.short!=null?`<div class="sec"><h3 style="margin:0 0 6px">${sym}${row.name?' · '+row.name:''}</h3><p>${row.error}.</p>${row.price!=null?`<p class="dim">מחיר אחרון: <b class="num">${fmt(row.price)}</b></p>`:''}<p class="dim" style="font-size:12px">אין כאן ממוצעים, ציונים או החלטה: אין מספיק נרות כדי לחשב אותם, והמערכת לא משלימה נתונים בהערכה.</p></div>`
+      :'<div class="err">לא הצלחתי לנתח את '+sym+': '+(row.error||e.message)+'</div>'}}
 function renderAll(){renderHeader();renderInfo();renderBottom();drawChart();drawInd()}
 
 function renderHeader(){const d=state.data,t=d.tech,f=d.fund||{};const c=d.candles[d.candles.length-1];
