@@ -56,6 +56,9 @@ def main():
             rows.append(q)
             ok += 1
             print("ok   %-8s %s" % (sym, (a.get("decision") or {}).get("verdict", "")), flush=True)
+        except D.ShortHistory:
+            rows.append(D.quick(sym))  # a new listing: price and a plain note, no analysis
+            print("short %-8s new listing / short history" % sym, flush=True)
         except Exception as e:
             rows.append({"symbol": sym, "error": str(e)[:160]})
             print("FAIL %-8s %s" % (sym, str(e)[:160]), flush=True)
