@@ -66,6 +66,15 @@ jobs:
           name: site-1
       - id: d1
         uses: actions/deploy-pages@v4
+        continue-on-error: true   # GitHub sometimes cannot find the artifact it was just given: wait and retry once
+        with:
+          artifact_name: site-1
+      - name: Retry deploy (1)
+        if: steps.d1.outcome == 'failure'
+        run: sleep 30
+      - id: d1b
+        uses: actions/deploy-pages@v4
+        if: steps.d1.outcome == 'failure'
         with:
           artifact_name: site-1
       - uses: actions/cache/save@v4   # saved now: a later run may cancel this one before it ends
@@ -88,6 +97,15 @@ jobs:
       - id: d2
         uses: actions/deploy-pages@v4
         if: steps.gate.outputs.open == 'true'
+        continue-on-error: true   # GitHub sometimes cannot find the artifact it was just given: wait and retry once
+        with:
+          artifact_name: site-2
+      - name: Retry deploy (2)
+        if: steps.d2.outcome == 'failure'
+        run: sleep 30
+      - id: d2b
+        uses: actions/deploy-pages@v4
+        if: steps.d2.outcome == 'failure'
         with:
           artifact_name: site-2
       - name: Wait (3)
@@ -106,6 +124,15 @@ jobs:
       - id: d3
         uses: actions/deploy-pages@v4
         if: steps.gate.outputs.open == 'true'
+        continue-on-error: true   # GitHub sometimes cannot find the artifact it was just given: wait and retry once
+        with:
+          artifact_name: site-3
+      - name: Retry deploy (3)
+        if: steps.d3.outcome == 'failure'
+        run: sleep 30
+      - id: d3b
+        uses: actions/deploy-pages@v4
+        if: steps.d3.outcome == 'failure'
         with:
           artifact_name: site-3
       - name: Wait (4)
@@ -124,6 +151,15 @@ jobs:
       - id: d4
         uses: actions/deploy-pages@v4
         if: steps.gate.outputs.open == 'true'
+        continue-on-error: true   # GitHub sometimes cannot find the artifact it was just given: wait and retry once
+        with:
+          artifact_name: site-4
+      - name: Retry deploy (4)
+        if: steps.d4.outcome == 'failure'
+        run: sleep 30
+      - id: d4b
+        uses: actions/deploy-pages@v4
+        if: steps.d4.outcome == 'failure'
         with:
           artifact_name: site-4
       - name: Wait (5)
@@ -142,6 +178,15 @@ jobs:
       - id: d5
         uses: actions/deploy-pages@v4
         if: steps.gate.outputs.open == 'true'
+        continue-on-error: true   # GitHub sometimes cannot find the artifact it was just given: wait and retry once
+        with:
+          artifact_name: site-5
+      - name: Retry deploy (5)
+        if: steps.d5.outcome == 'failure'
+        run: sleep 30
+      - id: d5b
+        uses: actions/deploy-pages@v4
+        if: steps.d5.outcome == 'failure'
         with:
           artifact_name: site-5
       - name: Wait (6)
@@ -160,6 +205,15 @@ jobs:
       - id: d6
         uses: actions/deploy-pages@v4
         if: steps.gate.outputs.open == 'true'
+        continue-on-error: true   # GitHub sometimes cannot find the artifact it was just given: wait and retry once
+        with:
+          artifact_name: site-6
+      - name: Retry deploy (6)
+        if: steps.d6.outcome == 'failure'
+        run: sleep 30
+      - id: d6b
+        uses: actions/deploy-pages@v4
+        if: steps.d6.outcome == 'failure'
         with:
           artifact_name: site-6
       - name: Wait (7)
@@ -178,6 +232,15 @@ jobs:
       - id: d7
         uses: actions/deploy-pages@v4
         if: steps.gate.outputs.open == 'true'
+        continue-on-error: true   # GitHub sometimes cannot find the artifact it was just given: wait and retry once
+        with:
+          artifact_name: site-7
+      - name: Retry deploy (7)
+        if: steps.d7.outcome == 'failure'
+        run: sleep 30
+      - id: d7b
+        uses: actions/deploy-pages@v4
+        if: steps.d7.outcome == 'failure'
         with:
           artifact_name: site-7
       - name: Wait (8)
@@ -196,6 +259,15 @@ jobs:
       - id: d8
         uses: actions/deploy-pages@v4
         if: steps.gate.outputs.open == 'true'
+        continue-on-error: true   # GitHub sometimes cannot find the artifact it was just given: wait and retry once
+        with:
+          artifact_name: site-8
+      - name: Retry deploy (8)
+        if: steps.d8.outcome == 'failure'
+        run: sleep 30
+      - id: d8b
+        uses: actions/deploy-pages@v4
+        if: steps.d8.outcome == 'failure'
         with:
           artifact_name: site-8
       - name: Wait (9)
@@ -214,6 +286,15 @@ jobs:
       - id: d9
         uses: actions/deploy-pages@v4
         if: steps.gate.outputs.open == 'true'
+        continue-on-error: true   # GitHub sometimes cannot find the artifact it was just given: wait and retry once
+        with:
+          artifact_name: site-9
+      - name: Retry deploy (9)
+        if: steps.d9.outcome == 'failure'
+        run: sleep 30
+      - id: d9b
+        uses: actions/deploy-pages@v4
+        if: steps.d9.outcome == 'failure'
         with:
           artifact_name: site-9
       - name: Wait (10)
@@ -232,6 +313,15 @@ jobs:
       - id: d10
         uses: actions/deploy-pages@v4
         if: steps.gate.outputs.open == 'true'
+        continue-on-error: true   # GitHub sometimes cannot find the artifact it was just given: wait and retry once
+        with:
+          artifact_name: site-10
+      - name: Retry deploy (10)
+        if: steps.d10.outcome == 'failure'
+        run: sleep 30
+      - id: d10b
+        uses: actions/deploy-pages@v4
+        if: steps.d10.outcome == 'failure'
         with:
           artifact_name: site-10
       - name: Wait (11)
@@ -250,6 +340,15 @@ jobs:
       - id: d11
         uses: actions/deploy-pages@v4
         if: steps.gate.outputs.open == 'true'
+        continue-on-error: true   # GitHub sometimes cannot find the artifact it was just given: wait and retry once
+        with:
+          artifact_name: site-11
+      - name: Retry deploy (11)
+        if: steps.d11.outcome == 'failure'
+        run: sleep 30
+      - id: d11b
+        uses: actions/deploy-pages@v4
+        if: steps.d11.outcome == 'failure'
         with:
           artifact_name: site-11
       - name: Wait (12)
@@ -268,6 +367,15 @@ jobs:
       - id: d12
         uses: actions/deploy-pages@v4
         if: steps.gate.outputs.open == 'true'
+        continue-on-error: true   # GitHub sometimes cannot find the artifact it was just given: wait and retry once
+        with:
+          artifact_name: site-12
+      - name: Retry deploy (12)
+        if: steps.d12.outcome == 'failure'
+        run: sleep 30
+      - id: d12b
+        uses: actions/deploy-pages@v4
+        if: steps.d12.outcome == 'failure'
         with:
           artifact_name: site-12
       - name: Wait (13)
@@ -286,5 +394,14 @@ jobs:
       - id: d13
         uses: actions/deploy-pages@v4
         if: steps.gate.outputs.open == 'true'
+        continue-on-error: true   # GitHub sometimes cannot find the artifact it was just given: wait and retry once
+        with:
+          artifact_name: site-13
+      - name: Retry deploy (13)
+        if: steps.d13.outcome == 'failure'
+        run: sleep 30
+      - id: d13b
+        uses: actions/deploy-pages@v4
+        if: steps.d13.outcome == 'failure'
         with:
           artifact_name: site-13
